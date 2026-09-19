@@ -18,7 +18,7 @@ There is no log file, no decisions file and no archive folder. A reason that sti
 
 ## Writing state
 
-- **State, not a log.** Present tense, no dates, no "we decided". "The engine computes X", not "we changed the engine to X".
+- **State, not a log.** Present tense, no date of a change or an update, no "we decided". "The engine computes X", not "we changed the engine to X".
 - **Replace, do not add.** A line that stopped being true is deleted and the true line is written in its place. No correction under it, no strikethrough, no "update:". Git keeps every earlier version, so deleting loses nothing. When a change makes a written fact false, find that line and rewrite it; do not append a new line that contradicts it.
 - **One fact, one home.** Another file that needs the fact links to it instead of restating it. A copy always goes stale, and invisibly.
 - **The code wins.** When a document contradicts the code, the code is right, and the document is fixed in the same commit.
@@ -84,7 +84,7 @@ Where in the code: src/lib/commissions.ts, the monthlyReport function
 
 - Open items live at the top of their domain file, under the first section. There is no central file.
 - The script recognises an item without knowing the language: a `###` heading whose first line below is one word, a colon, and a date as `YYYY-MM-DD`. Keep that shape exactly, with the label in the project's language (`נפתח:` in Hebrew).
-- That date is the only date allowed in state files. The age of a gap is information.
+- The date of a change or an update is not allowed in state files: it turns the line into a log entry. That date, the age of a gap, is allowed: it is information. So is a date that is a fact about the world the product lives in: a validity, a deadline, a term in a contract ("The rate is valid until 2026-12-31").
 
 ### Ceilings
 

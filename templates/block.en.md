@@ -3,14 +3,14 @@
 The files in the table below describe the project as it is now. Read the queue, then only the state file that touches your task. Do not read everything.
 
 ### How state files are written
-- State, not a log: present tense, no dates, no "we decided" or "we changed". "The engine computes X", not "we changed the engine to X".
+- State, not a log: present tense, no date of a change or an update, no "we decided" or "we changed". A date that is a fact about the world (a validity, a deadline, a term in a contract) is allowed. "The engine computes X", not "we changed the engine to X".
 - A line that stopped being true is deleted, and the true one is written in its place. No correction under it, no strikethrough. Git keeps the old version.
 - One fact lives in one file. Another file that needs it links to it.
 - When the docs contradict the code, the code is right, and the docs are fixed in the same commit.
 - What is unknown is written as unknown, with what is missing to know it.
 - What is broken or open goes at the top of the file, what is healthy below.
 - Fixed order in a domain file: open and broken, what the domain does, what the user sees and does, data and permissions, how it is built, traps.
-- An open item: a `###` heading, then `Opened: YYYY-MM-DD`, the risk, how it closes, and where in the code. That is the only date allowed in state files.
+- An open item: a `###` heading, then `Opened: YYYY-MM-DD`, the risk, how it closes, and where in the code. That date is allowed too.
 - An open item that closes is deleted, and the state it touched changes in the same save.
 - Ceiling: 300 lines per state file, 100 for the queue. Over it, shorten first, and split only if that is not enough.
 
