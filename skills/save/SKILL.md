@@ -8,6 +8,8 @@ allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/*) Bash(git status *) Ba
 
 The plugin's scripts are in `${CLAUDE_PLUGIN_ROOT}/scripts/`. Read `${CLAUDE_PLUGIN_ROOT}/skills/rules.md` before changing a state file, unless you already read it in this session.
 
+Run each command on its own, in exactly the forms listed in `allowed-tools`: no `cd` before it, no `&&` chains, no pipes. Read and search files with the Read, Grep and Glob tools, never with shell commands. Anything else stops to ask the person for approval, once per command.
+
 If `docs/state/settings.json` does not exist, the project has no memory: commit as usual, and suggest `/trabel-memory:setup` in one line.
 
 Work in this order. Every step reads the files and git, not your memory of the session: in a long session the beginning is no longer in context.

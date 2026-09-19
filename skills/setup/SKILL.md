@@ -8,6 +8,8 @@ allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/*) Bash(node --version) 
 
 The plugin's scripts are in `${CLAUDE_PLUGIN_ROOT}/scripts/`. Its data folder on this machine is `${CLAUDE_PLUGIN_DATA}`. Pass that path to the installer exactly as written here: the variable is not set in the shell.
 
+Run each command on its own, in exactly the forms listed in `allowed-tools`: no `cd` before it, no `&&` chains, no pipes. Read and search files with the Read, Grep and Glob tools, never with shell commands. Anything else stops to ask the person for approval, once per command.
+
 Before writing any file, read `${CLAUDE_PLUGIN_ROOT}/skills/rules.md`. It holds the rules every line you write must follow.
 
 Setup writes files into the person's repository, so it runs only when asked (or when their project instructions ask for it). It is done once; running it again on a project that has memory repairs it.
