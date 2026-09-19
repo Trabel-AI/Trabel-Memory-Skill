@@ -42,3 +42,13 @@ test('setup and save may read the plugin files without asking', () => {
     assert.ok(line && line.includes('Read(${CLAUDE_PLUGIN_ROOT}/**)'), name);
   }
 });
+
+// Setup and save end in a commit: that is what the person asked for when
+// they ran them, so the commit must not stop to ask again.
+test('setup and save may commit without asking', () => {
+  for (const name of ['setup', 'save']) {
+    const text = fs.readFileSync(path.join(__dirname, '..', 'skills', name, 'SKILL.md'), 'utf8');
+    const line = text.split('\n').find((l) => l.startsWith('allowed-tools:'));
+    assert.ok(line.includes('Bash(git add *)') && line.includes('Bash(git commit *)'), name);
+  }
+});

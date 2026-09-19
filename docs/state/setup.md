@@ -25,7 +25,7 @@ owns:
 ## נתונים והרשאות
 
 - ההקמה כותבת רק: `docs/state/` (כולל `settings.json` עם `gate: block` ו-`language`), `docs/NEXT.md`, הבלוק ב-CLAUDE.md, וההוק בתיקיית הגיט המקומית. לקומיט נכנסים רק קבצי הזיכרון, ו-`design.md` רק אם לא היה במעקב ואומץ.
-- `allowed-tools` מאשר מראש: קריאת קבצי התוסף, `node` על הסקריפטים של התוסף, `node --version`, ו-`git rev-parse`, `git status`, `git ls-files`, `git log`, `git config --get`.
+- `allowed-tools` מאשר מראש: קריאת קבצי התוסף, `node` על הסקריפטים של התוסף, `node --version`, ו-`git rev-parse`, `git status`, `git ls-files`, `git log`, `git config --get`, `git add`, `git commit`.
 
 ## איך זה בנוי
 
