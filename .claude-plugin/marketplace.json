@@ -1,5 +1,6 @@
 {
   "name": "trabel",
+  "description": "Trabel plugins for Claude Code.",
   "owner": {
     "name": "Trabel"
   },
