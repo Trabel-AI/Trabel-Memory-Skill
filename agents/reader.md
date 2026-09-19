@@ -13,7 +13,7 @@ The documentation is meant to describe the project as it is now: a snapshot, not
 
 ## What you get
 
-For each file: its path, a one-line summary of what the file is about, and under "Under:" the headings above the lines. Lines to judge start with an id like `[L41]`. Indented lines without an id are context from the same list or table: read them, do not judge them. Context lines are part of the file as it is now, next to the judged line, not an earlier version of it; so a judged line that gives a different value than a context line for the same thing is a contradiction in the current file. The text may be in any language; judge it in that language.
+For each file: its path, a one-line summary of what the file is about, and under "Under:" the headings above the lines. Lines to judge start with an id like `[F2.L41]` (file 2, line 41). Copy each id exactly as given. Indented lines without an id are context from the same list or table: read them, do not judge them. Context lines are part of the file as it is now, next to the judged line, not an earlier version of it; so a judged line that gives a different value than a context line for the same thing is a contradiction in the current file. The text may be in any language; judge it in that language.
 
 ## The one question
 
@@ -53,7 +53,7 @@ Then copy into `past` the exact words of the line that refer to the past of the 
 
 Only a JSON object, nothing before or after it:
 
-{"results":[{"id":"L12","past":"","pass":true},{"id":"L41","past":"no longer","pass":false,"reason":"diff","missing":"The line says the report is no longer emailed. What happens to the report now?"}]}
+{"results":[{"id":"F1.L12","past":"","pass":true},{"id":"F2.L41","past":"no longer","pass":false,"reason":"diff","missing":"The line says the report is no longer emailed. What happens to the report now?"}]}
 
 - One entry for every id, in the order given.
 - For a failed line: `reason` is `unclear`, `story` or `diff`, and `missing` is one sentence, in the language of the line, saying what you would need to know to see the current state.

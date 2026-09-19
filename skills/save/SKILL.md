@@ -61,7 +61,9 @@ In `docs/NEXT.md`, tick what this work completed. A queue whose items are all do
 
 Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/reader.js"`. If it says no state lines changed, skip this step. Otherwise give its output, exactly as it is, as the whole prompt of the Agent tool with `subagent_type` `trabel-memory:reader`. Add nothing to it: the reader must not see the session, the diff or the project, because whoever wrote a line cannot judge it.
 
-The reader answers in JSON. For each failed line (`unclear`, `story` or `diff`), rewrite it so it states the current state, using what the reader said was missing, then run `reader.js` and the reader again. At most two rounds. A line that still fails does not stop the save; it goes into the report.
+The reader answers in JSON, one entry per id. It sometimes skips a line, so check every answer with the script, not by eye: pipe the answer, exactly as it came back, into `node "${CLAUDE_PLUGIN_ROOT}/scripts/reader.js" --missing` (a heredoc on stdin). If it prints "Every line has an answer.", go on. Otherwise its output is the input again with only the unanswered lines: give it to the reader as it is, then run `--missing` again with both answers on stdin, one after the other. This resend is not one of the two rounds below. A line still unanswered after it is reported as a line that was not checked; it never passes in silence.
+
+For each failed line (`unclear`, `story` or `diff`), rewrite it so it states the current state, using what the reader said was missing, then run `reader.js` and the reader again. At most two rounds. A line that still fails does not stop the save; it goes into the report.
 
 ## 9. Commit
 
@@ -82,5 +84,7 @@ Open items: one closed (commission on a cancelled deal), one opened (the report 
 The gate blocked once: a new file with no owner, assigned to commissions.
 New-reader test: 14 lines, 13 passed, one rewritten and passed.
 ```
+
+A line the reader never answered is named in the report as not checked, with its file.
 
 Include a new domain file if one was born, lagging docs completed from step 2, broad domains from step 6, and a gate that is not installed if `install.js` or the session start said so.

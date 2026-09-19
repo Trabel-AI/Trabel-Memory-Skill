@@ -10,9 +10,15 @@
 // judged. A new state file is sent whole.
 //
 //   node reader.js [--json]
+//   node reader.js --missing < answers
 //
 // The save hands this output, as it is, to the reader agent (agents/reader.md).
 // tests/reader renders its fixed cases with the same render function.
+//
+// --missing reads the reader's answers on stdin (one or more, one after the
+// other) and prints the input again with only the lines no answer covers, so
+// they are sent again. A line is covered by an object in the answers with its
+// id and a "pass" of true or false; broken JSON around it does not matter.
 
 const { git, gitText, repoRoot, hasHead } = require('./lib/git');
 const S = require('./lib/settings');
@@ -126,23 +132,53 @@ function collectChanged(root) {
   return files;
 }
 
-// The text the reader agent gets. Judged lines carry an id, [L<n>]; context
-// lines are indented and carry none.
+// A judged line's id: the file's place in the input and the line's number in
+// that file. The line number alone is not unique when two files change.
+const idOf = (fileIndex, n) => `F${fileIndex + 1}.L${n}`;
+
+// The text the reader agent gets. Judged lines carry an id, [F<k>.L<n>];
+// context lines are indented and carry none. A null in files is a file with
+// nothing left to judge: it is skipped, and the files after it keep their ids.
 function render(files) {
-  if (!files.length) return 'No state lines changed.';
+  if (!files.some(Boolean)) return 'No state lines changed.';
   const out = [];
-  for (const f of files) {
+  files.forEach((f, k) => {
+    if (!f) return;
     out.push(`=== File: ${f.path}${f.whole ? ' (the whole file is new)' : ''}`);
     out.push(`About this file: ${f.summary || '(no summary)'}`);
     for (const s of f.sections) {
       out.push(`--- Under: ${s.headings.length ? s.headings.join(' > ') : '(top of the file)'}`);
-      for (const l of s.lines) out.push(l.judged ? `[L${l.n}] ${l.text}` : `       ${l.text}`);
+      for (const l of s.lines) out.push(l.judged ? `[${idOf(k, l.n)}] ${l.text}` : `       ${l.text}`);
     }
     out.push('');
-  }
-  const count = files.reduce((n, f) => n + f.sections.reduce((m, s) => m + s.lines.filter((l) => l.judged).length, 0), 0);
+  });
+  const count = files.filter(Boolean).reduce((n, f) => n + f.sections.reduce((m, s) => m + s.lines.filter((l) => l.judged).length, 0), 0);
   out.push(`${count} line${count === 1 ? '' : 's'} to judge.`);
   return out.join('\n');
+}
+
+// The ids the answers cover: each {...} with an "id" and a boolean "pass".
+function answeredIds(answers) {
+  const ids = new Set();
+  for (const m of String(answers).matchAll(/\{[^{}]*\}/g)) {
+    const id = m[0].match(/"id"\s*:\s*"([^"]+)"/);
+    if (id && /"pass"\s*:\s*(true|false)/.test(m[0])) ids.add(id[1]);
+  }
+  return ids;
+}
+
+// The same files with only the judged lines no answer covers. Ids are kept:
+// a line keeps its id when it is sent again. Returns [] when all are covered.
+function missingFrom(files, answers) {
+  const done = answeredIds(answers);
+  const out = [];
+  files.forEach((f, k) => {
+    const sections = f.sections
+      .map((s) => ({ ...s, lines: s.lines.map((l) => (l.judged && done.has(idOf(k, l.n)) ? { ...l, judged: false } : l)) }))
+      .filter((s) => s.lines.some((l) => l.judged));
+    out.push(sections.length ? { ...f, sections } : null);
+  });
+  return out.some(Boolean) ? out : [];
 }
 
 if (require.main === module) {
@@ -153,6 +189,9 @@ if (require.main === module) {
     if (!files) {
       output = `No memory in this project: ${S.SETTINGS_PATH} does not exist.`;
       code = 1;
+    } else if (process.argv.includes('--missing')) {
+      const missing = missingFrom(files, require('fs').readFileSync(0, 'utf8'));
+      output = missing.length ? render(missing) : 'Every line has an answer.';
     } else {
       output = process.argv.includes('--json') ? JSON.stringify(files, null, 2) : render(files);
     }
@@ -164,4 +203,4 @@ if (require.main === module) {
   process.exitCode = code;
 }
 
-module.exports = { collectChanged, describeFile, render };
+module.exports = { collectChanged, describeFile, render, idOf, missingFrom };

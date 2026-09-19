@@ -13,12 +13,14 @@
 // scripts/reader.js, to the trabel-memory:reader agent. The session runs in an
 // empty folder, always the same one ($TMP/trabel-reader-test), so no project is
 // read and Claude Code keeps a single folder for it under ~/.claude/projects.
+// As in a real save, lines the answer skipped are sent once more
+// (reader.js --missing), and only a line still unanswered counts as missing.
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
-const { render } = require('../../scripts/reader');
+const { render, idOf, missingFrom } = require('../../scripts/reader');
 
 const REPO = path.join(__dirname, '..', '..');
 const BATCH = 10;
@@ -28,7 +30,7 @@ function arg(name) {
   return i >= 0 ? process.argv[i + 1] : null;
 }
 
-// Each case becomes one file section. Ids are L<n>, unique across the run.
+// Each case becomes one file. Ids are F<k>.L<n>, as reader.js gives them.
 function toFiles(cases, first) {
   return cases.map((c, k) => {
     const n = (first + k + 1) * 10;
@@ -38,7 +40,7 @@ function toFiles(cases, first) {
       { n, text: c.line, judged: true },
       ...(c.after || []).map((t, j) => ({ n: n + j + 1, text: t, judged: false })),
     ];
-    return { id: `L${n}`, file: { path: c.file, summary: c.summary, whole: false, sections: [{ headings: c.headings, lines }] } };
+    return { id: idOf(k, n), file: { path: c.file, summary: c.summary, whole: false, sections: [{ headings: c.headings, lines }] } };
   });
 }
 
@@ -56,15 +58,17 @@ function runClaude(claude, prompt, cwd) {
   });
 }
 
-function parseResults(text) {
-  const start = text.indexOf('{"results"') >= 0 ? text.indexOf('{"results"') : text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start < 0 || end < start) return null;
-  try {
-    return JSON.parse(text.slice(start, end + 1)).results;
-  } catch (e) {
-    return null;
+// Every {"id", "pass", ...} object in the answers, even when the JSON around
+// it is broken. A later answer for the same id comes first.
+function allResults(text) {
+  const out = [];
+  for (const m of text.matchAll(/\{[^{}]*\}/g)) {
+    try {
+      const o = JSON.parse(m[0]);
+      if (o && typeof o.id === 'string' && typeof o.pass === 'boolean') out.unshift(o);
+    } catch (e) { /* not a whole result */ }
   }
+  return out;
 }
 
 async function main() {
@@ -73,17 +77,25 @@ async function main() {
   const cwd = path.join(os.tmpdir(), 'trabel-reader-test');
   fs.mkdirSync(cwd, { recursive: true });
 
+  let resent = 0;
   const batches = [];
   for (let i = 0; i < cases.length; i += BATCH) batches.push({ first: i, cases: cases.slice(i, i + BATCH) });
 
   const outcomes = await Promise.all(batches.map(async (b) => {
     const items = toFiles(b.cases, b.first);
-    const input = render(items.map((x) => x.file));
-    const prompt =
+    const files = items.map((x) => x.file);
+    const ask = (input) => runClaude(claude,
       'Use the trabel-memory:reader agent. Give it exactly the text between the markers below as its whole task, ' +
-      'then print its answer exactly as it returned it, with nothing added.\n<<<\n' + input + '\n>>>';
-    const r = await runClaude(claude, prompt, cwd);
-    const results = parseResults(r.out) || [];
+      'then print its answer exactly as it returned it, with nothing added.\n<<<\n' + input + '\n>>>', cwd);
+    const r = await ask(render(files));
+    const missing = missingFrom(files, r.out);
+    if (missing.length) {
+      const again = await ask(render(missing));
+      resent += (render(missing).match(/^\[F\d+\.L\d+\]/gm) || []).length;
+      r.out += '\n' + again.out;
+      r.err += again.err;
+    }
+    const results = allResults(r.out);
     return b.cases.map((c, k) => {
       const got = results.find((x) => x && x.id === items[k].id);
       const verdict = got ? (got.pass ? 'pass' : 'fail') : 'missing';
@@ -104,7 +116,8 @@ async function main() {
   const passes = all.filter((o) => o.c.expect === 'pass');
   console.log(
     `\nMust fail: ${fails.filter((o) => o.verdict === 'fail').length}/${fails.length} failed. ` +
-      `Must pass: ${passes.filter((o) => o.verdict === 'pass').length}/${passes.length} passed.`,
+      `Must pass: ${passes.filter((o) => o.verdict === 'pass').length}/${passes.length} passed.` +
+      (resent ? ` Sent again after a skipped answer: ${resent}.` : ''),
   );
   process.exitCode = wrong ? 1 : 0;
 }

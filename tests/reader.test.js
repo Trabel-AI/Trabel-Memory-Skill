@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { repoWithMemory, card, cleanup } = require('./helpers');
-const { collectChanged, render } = require('../scripts/reader');
+const { collectChanged, render, missingFrom } = require('../scripts/reader');
 
 test.after(cleanup);
 
@@ -30,7 +30,7 @@ test('reader: a changed line comes with its file, summary and headings, and head
   assert.ok(text.includes('=== File: docs/state/customers.md'), text);
   assert.ok(text.includes('About this file: The customer list and customer card'), text);
   assert.ok(text.includes('--- Under: # Customers > ## What the user sees > ### The list'), text);
-  assert.ok(/\[L\d+\] The list shows active customers only\./.test(text), text);
+  assert.ok(/\[F1\.L\d+\] The list shows active customers only\./.test(text), text);
 });
 
 test('reader: a changed list item comes with the rest of the list as context', () => {
@@ -72,4 +72,50 @@ test('reader: CRLF files and deleted lines', () => {
 test('reader: a project without memory', () => {
   const { makeRepo } = require('./helpers');
   assert.strictEqual(collectChanged(makeRepo().dir), null);
+});
+
+test('reader: ids carry the file, so the same line number in two files is two ids', () => {
+  const repo = repoWithMemory();
+  const body = (name) => card({ name, summary: name, owns: [`src/${name.toLowerCase()}/**`] }) + `# ${name}\n\nOne line.\n`;
+  repo.write('docs/state/alpha.md', body('Alpha'));
+  repo.write('docs/state/beta.md', body('Beta'));
+  const text = render(collectChanged(repo.dir));
+  const ids = [...text.matchAll(/^\[(F\d+\.L\d+)\]/gm)].map((m) => m[1]);
+  assert.strictEqual(ids.length, 2, text);
+  assert.notStrictEqual(ids[0], ids[1]);
+  assert.strictEqual(ids[0].split('.')[1], ids[1].split('.')[1]);
+});
+
+test('reader: --missing sends again only the lines no answer covers, with the same ids', () => {
+  const repo = repoWithMemory();
+  const body = (name, lines) => card({ name, summary: name, owns: [`src/${name.toLowerCase()}/**`] }) + `# ${name}\n\n${lines}`;
+  repo.write('docs/state/alpha.md', body('Alpha', 'First.\n\nSecond.\n'));
+  repo.write('docs/state/beta.md', body('Beta', 'Third.\n'));
+  const files = collectChanged(repo.dir);
+  const ids = [...render(files).matchAll(/^\[(F\d+\.L\d+)\] (\w+)/gm)].map((m) => [m[2], m[1]]);
+  const id = Object.fromEntries(ids);
+
+  // An answer that skips "Second." and breaks its JSON halfway still covers what it names.
+  const answer = '```json\n{"results":[{"id":"' + id.First + '","past":"","pass":true},{"id":"' + id.Third + '","past":"a" ... "b","pass":false,"reason":"diff"}';
+  const missing = missingFrom(files, answer);
+  const text = render(missing);
+  assert.deepStrictEqual([...text.matchAll(/^\[(F\d+\.L\d+)\] (\w+)/gm)].map((m) => [m[2], m[1]]), [['Second', id.Second]], text);
+  assert.ok(!text.includes('beta.md'), text);
+
+  // An entry with no verdict does not count; two answers together cover everything.
+  assert.strictEqual(missingFrom(files, answer + '{"id":"' + id.Second + '"}').length > 0, true);
+  assert.deepStrictEqual(missingFrom(files, answer + '\n{"results":[{"id":"' + id.Second + '","past":"","pass":true}]}'), []);
+});
+
+test('reader: --missing on the command line reads the answers on stdin', () => {
+  const { run, PLUGIN } = require('./helpers');
+  const path = require('path');
+  const repo = repoWithMemory();
+  repo.write('docs/state/alpha.md', card({ name: 'Alpha', summary: 'Alpha', owns: ['src/alpha/**'] }) + '# Alpha\n\nFirst.\n');
+  const script = path.join(PLUGIN, 'scripts', 'reader.js');
+  const id = render(collectChanged(repo.dir)).match(/^\[(F\d+\.L\d+)\]/m)[1];
+  const none = run(repo.dir, process.execPath, [script, '--missing'], { input: '' });
+  assert.ok(none.stdout.includes(`[${id}] First.`), none.stdout);
+  const all = run(repo.dir, process.execPath, [script, '--missing'], { input: `{"id":"${id}","pass":true}` });
+  assert.strictEqual(all.stdout.trim(), 'Every line has an answer.');
 });
