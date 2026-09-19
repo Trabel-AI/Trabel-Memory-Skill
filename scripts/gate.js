@@ -7,15 +7,36 @@
 
 const fs = require('fs');
 const path = require('path');
-const G = require('./lib/git');
-const S = require('./lib/settings');
-const { parseCard } = require('./lib/card');
-const { hasStar, isAllStars, toRegExp } = require('./lib/glob');
-const { buildOwnership } = require('./lib/owners');
-const { findOpenItems, withoutOpenItems } = require('./lib/openItems');
-const { renderTable, extractBlock, tablesMatch } = require('./lib/indexTable');
-const { countLines, splitLines } = require('./lib/text');
-const { messagesFor } = require('./lib/messages');
+
+// The exit code for "blocked". The git hook blocks only on this code and lets
+// the commit through on any other, so a broken plugin (a missing or damaged
+// file, Node failing to start) never locks anyone out. Node itself never
+// exits with 20.
+const BLOCKED = 20;
+
+// The helpers load inside main's try, so a broken helper file fails open
+// with the usual warning.
+let L = null;
+function libs() {
+  if (!L) {
+    L = {
+      G: require('./lib/git'),
+      S: require('./lib/settings'),
+      ...require('./lib/card'),
+      ...require('./lib/glob'),
+      ...require('./lib/owners'),
+      ...require('./lib/openItems'),
+      ...require('./lib/indexTable'),
+      ...require('./lib/text'),
+      ...require('./lib/project'),
+      ...require('./lib/messages'),
+    };
+  }
+  return L;
+}
+
+// The command that rebuilds the index, named in the index message.
+const INDEX_COMMAND = `node "${path.join(__dirname, 'index.js').replace(/\\/g, '/')}"`;
 
 const BROAD_SHARE = 0.4;
 const BROAD_MIN_FILES = 20;
@@ -24,6 +45,7 @@ const MAX_LISTED = 20;
 // Message lines, without git's comment lines and without the diff that
 // `git commit -v` adds below the scissors line.
 function messageLines(text) {
+  const { splitLines } = libs();
   const lines = [];
   for (const line of splitLines(text)) {
     if (/^# -+ >8 -+$/.test(line)) break;
@@ -33,17 +55,13 @@ function messageLines(text) {
   return lines;
 }
 
-function hasTrailer(lines, key) {
-  const re = new RegExp('^' + key + ':\\s*\\S', 'i');
-  return lines.some((l) => re.test(l.trim()));
-}
-
 function sameList(a, b) {
   return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
 // Everything the gate knows about the state files, as the commit will leave them.
 function loadStateFiles(root, settings) {
+  const { G, S, stateEntry, adoptedEntry } = libs();
   const mdPaths = G.indexFiles(root, S.STATE_DIR)
     .filter((p) => p.startsWith(S.STATE_DIR) && p.toLowerCase().endsWith('.md'));
   const adoptedPaths = settings.adopted.map((a) => a.path);
@@ -52,20 +70,20 @@ function loadStateFiles(root, settings) {
   const files = [];
   for (const p of mdPaths) {
     const text = blobs.get(':' + p);
-    if (text == null) continue;
-    const card = parseCard(text) || { name: '', summary: '', owns: [], budget: null };
-    const general = p === S.STATE_DIR + 'architecture.md' || p === S.STATE_DIR + 'conventions.md';
-    files.push({ path: p, text, summary: card.summary, owns: card.owns, budget: card.budget || S.DEFAULT_BUDGET, general, adopted: false });
+    if (text != null) files.push(stateEntry(p, text));
   }
   for (const a of settings.adopted) {
     const text = blobs.get(':' + a.path);
-    if (text == null) continue;
-    files.push({ path: a.path, text, summary: a.summary, owns: a.owns, budget: a.budget || S.DEFAULT_BUDGET, general: false, adopted: true });
+    if (text != null) files.push(adoptedEntry(a, text));
   }
   return files;
 }
 
 function runGate({ msgFile, cwd, state }) {
+  const {
+    G, S, parseCard, hasStar, isAllStars, toRegExp, buildOwnership, findOpenItems, withoutOpenItems,
+    renderTable, extractBlock, tablesMatch, countLines, hasTrailer, messagesFor,
+  } = libs();
   const root = G.repoRoot(cwd);
   const settingsFile = path.join(root, S.SETTINGS_PATH);
   if (!fs.existsSync(settingsFile)) return { exitCode: 0 };
@@ -211,7 +229,7 @@ function runGate({ msgFile, cwd, state }) {
 
   if (!failures.length) return { exitCode: 0 };
   return {
-    exitCode: settings.gate === 'warn' ? 0 : 1,
+    exitCode: settings.gate === 'warn' ? 0 : BLOCKED,
     output: report(t, settings.gate === 'warn' ? t.warned : t.blocked, failures),
   };
 }
@@ -234,7 +252,8 @@ function report(t, header, failures) {
     out.push('');
     for (const f of group.slice(0, MAX_LISTED)) out.push(f.line);
     if (group.length > MAX_LISTED) out.push(t.more(group.length - MAX_LISTED));
-    out.push(t[FIXES[kind]]);
+    const fix = t[FIXES[kind]];
+    out.push(typeof fix === 'function' ? fix(INDEX_COMMAND) : fix);
     if (group[0].extra) out.push(...group[0].extra);
   }
   return out.join('\n') + '\n';
@@ -249,7 +268,7 @@ function main(argv) {
   } catch (err) {
     try {
       const reason = String((err && err.message) || err).split(/\r?\n/)[0];
-      process.stderr.write(messagesFor(state.language).crashed(reason) + '\n');
+      process.stderr.write(require('./lib/messages').messagesFor(state.language).crashed(reason) + '\n');
     } catch (e) {
       // Nothing more to do. The commit goes through.
     }
@@ -261,4 +280,4 @@ if (require.main === module) {
   process.exitCode = main(process.argv);
 }
 
-module.exports = { runGate, main };
+module.exports = { runGate, main, BLOCKED };

@@ -1,6 +1,8 @@
 'use strict';
 
-// Throwaway git repositories with the gate installed as the commit-msg hook.
+// Throwaway git repositories with the gate installed as the commit-msg hook,
+// by the real installer: the sh hook in .git/hooks and the linker in a
+// throwaway plugin data folder.
 
 const fs = require('fs');
 const os = require('os');
@@ -9,26 +11,38 @@ const { spawnSync } = require('child_process');
 const { parseCard } = require('../scripts/lib/card');
 const { parseSettings } = require('../scripts/lib/settings');
 const { renderTable, BLOCK_START, BLOCK_END } = require('../scripts/lib/indexTable');
+const { install } = require('../scripts/lib/hook');
 
-const GATE = path.resolve(__dirname, '..', 'scripts', 'gate.js').replace(/\\/g, '/');
+const PLUGIN = path.resolve(__dirname, '..');
+const GATE = path.join(PLUGIN, 'scripts', 'gate.js').replace(/\\/g, '/');
 
 const created = [];
 
-function run(cwd, cmd, args) {
-  const r = spawnSync(cmd, args, { cwd, encoding: 'utf8', windowsHide: true });
+function run(cwd, cmd, args, options = {}) {
+  const r = spawnSync(cmd, args, { cwd, encoding: 'utf8', windowsHide: true, ...options });
   if (r.error) throw r.error;
   return r;
 }
 
-function makeRepo({ spaces = false } = {}) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), spaces ? 'trabel gate ' : 'trabel-gate-'));
-  created.push(base);
+function tempDir(prefix) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  created.push(dir);
+  return dir;
+}
+
+// A copy of the plugin's scripts, for tests that break or move the plugin.
+function copyPlugin() {
+  const root = path.join(tempDir('trabel-plugin-'), 'plugin copy');
+  fs.cpSync(path.join(PLUGIN, 'scripts'), path.join(root, 'scripts'), { recursive: true });
+  return root;
+}
+
+// installHook: false leaves the repository without the gate.
+function makeRepo({ spaces = false, pluginRoot = PLUGIN, installHook = true } = {}) {
+  const base = tempDir(spaces ? 'trabel gate ' : 'trabel-gate-');
   const dir = path.join(base, spaces ? 'my project' : 'repo');
-  const hooks = path.join(base, 'hooks');
+  const dataDir = path.join(base, 'plugin data');
   fs.mkdirSync(dir);
-  fs.mkdirSync(hooks);
-  fs.writeFileSync(path.join(hooks, 'commit-msg'), `#!/bin/sh\nexec node "${GATE}" "$1"\n`);
-  fs.chmodSync(path.join(hooks, 'commit-msg'), 0o755);
 
   const git = (...args) => {
     const r = run(dir, 'git', args);
@@ -41,10 +55,12 @@ function makeRepo({ spaces = false } = {}) {
   git('config', 'core.autocrlf', 'false');
   git('config', 'core.safecrlf', 'false');
   git('config', 'commit.gpgsign', 'false');
-  git('config', 'core.hooksPath', hooks.replace(/\\/g, '/'));
+  if (installHook) install({ root: dir, pluginRoot, dataDir });
 
   const repo = {
     dir,
+    base,
+    dataDir,
     git,
     write(file, content) {
       const full = path.join(dir, file);
@@ -60,11 +76,12 @@ function makeRepo({ spaces = false } = {}) {
       return repo;
     },
     // Stages everything and commits. Returns { ok, output }.
-    commit(message, extra = []) {
+    // env replaces the environment git runs in.
+    commit(message, extra = [], env) {
       git('add', '-A');
       const msgFile = path.join(base, 'message.txt');
       fs.writeFileSync(msgFile, message);
-      const r = run(dir, 'git', ['commit', '-q', '-F', msgFile, ...extra]);
+      const r = run(dir, 'git', ['commit', '-q', '-F', msgFile, ...extra], env ? { env } : {});
       return { ok: r.status === 0, output: (r.stdout || '') + (r.stderr || '') };
     },
     // Rewrites the CLAUDE.md block so the index matches the cards on disk.
@@ -103,8 +120,8 @@ function card({ name, summary, owns = [], budget }) {
 // A repo with memory set up and a first commit:
 //   architecture owns package.json, conventions owns src/lib/util.js,
 //   customers owns src/customers/**.
-function repoWithMemory({ language = 'en', gate = 'block', spaces = false, ignore, adopted } = {}) {
-  const repo = makeRepo({ spaces });
+function repoWithMemory({ language = 'en', gate = 'block', spaces = false, ignore, adopted, pluginRoot, installHook } = {}) {
+  const repo = makeRepo({ spaces, pluginRoot, installHook });
   const settings = { gate, language };
   if (ignore) settings.ignore = ignore;
   if (adopted) settings.adopted = adopted;
@@ -132,4 +149,4 @@ function cleanup() {
   }
 }
 
-module.exports = { makeRepo, repoWithMemory, card, cleanup, GATE };
+module.exports = { makeRepo, repoWithMemory, card, cleanup, copyPlugin, tempDir, run, PLUGIN, GATE };

@@ -27,7 +27,7 @@ const MESSAGES = {
 
     indexMissing: 'אינדקס חסר: אין ב-CLAUDE.md בלוק של trabel-memory עם טבלת אינדקס.',
     indexMismatch: 'אינדקס לא תואם: טבלת האינדקס שב-CLAUDE.md אינה תואמת לכרטיסים.',
-    indexFix: 'בנה את הטבלה מחדש מהכרטיסים. כך היא צריכה להיראות:',
+    indexFix: (cmd) => `בנה את הטבלה מחדש מהכרטיסים בהרצה אחת: ${cmd}\nכך היא צריכה להיראות:`,
 
     vanished: (title, file) => `פריט פתוח נעלם: "${title}" נמחק מ-${file}, ושאר הקובץ לא השתנה.`,
     vanishedFix: 'סגירת פריט פתוח משנה את תיאור המצב. כתוב בקובץ את המצב החדש כעובדה, גם כשהפריט נסגר בהחלטה ולא בקוד.',
@@ -56,7 +56,7 @@ const MESSAGES = {
 
     indexMissing: 'Index missing: CLAUDE.md has no trabel-memory block with an index table.',
     indexMismatch: 'Index out of date: the index table in CLAUDE.md does not match the cards.',
-    indexFix: 'Rebuild the table from the cards. It should read:',
+    indexFix: (cmd) => `Rebuild the table from the cards with one run: ${cmd}\nIt should read:`,
 
     vanished: (title, file) => `Open item vanished: "${title}" was deleted from ${file}, and the rest of the file did not change.`,
     vanishedFix: 'Closing an open item changes the description of the state. Write the new state in the file as a fact, even when the item was closed by a decision and not by code.',

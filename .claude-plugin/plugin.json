@@ -1,0 +1,10 @@
+{
+  "name": "trabel-memory",
+  "description": "Project memory that always describes the current state: state files per domain, a queue, and a git gate that blocks commits whose code changed while its docs did not.",
+  "author": {
+    "name": "Trabel"
+  },
+  "homepage": "https://github.com/Trabel-AI/Trabel-Memory-Skill",
+  "repository": "https://github.com/Trabel-AI/Trabel-Memory-Skill",
+  "keywords": ["memory", "documentation", "git-hook", "context"]
+}

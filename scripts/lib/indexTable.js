@@ -68,7 +68,30 @@ function extractBlock(text) {
   }
   const table = tableStart >= 0 ? lines.slice(tableStart, tableEnd) : [];
   const rulesLines = (tableStart >= 0 ? tableStart : end) - start;
-  return { table, rulesLines };
+  return { table, rulesLines, start, end, tableStart, tableEnd };
+}
+
+// The CLAUDE.md text with the index table replaced by `table`. Without a table
+// in the block, it goes at the end of the block. Without a block, a block
+// holding only the table is added at the end. The rest of the file is kept
+// exactly, line endings included.
+function withTable(text, table) {
+  const source = text || '';
+  const eol = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source === '' ? [] : splitLines(source);
+  const block = extractBlock(source);
+  if (!block) {
+    if (lines.length && lines[lines.length - 1].trim() !== '') lines.push('');
+    lines.push(BLOCK_START, ...table, BLOCK_END);
+  } else if (block.tableStart >= 0) {
+    lines.splice(block.tableStart, block.tableEnd - block.tableStart, ...table);
+  } else {
+    const hasEnd = block.end < lines.length;
+    const gap = block.end - 1 > block.start && lines[block.end - 1].trim() !== '' ? [''] : [];
+    lines.splice(block.end, 0, ...gap, ...table, ...(hasEnd ? [] : [BLOCK_END]));
+  }
+  const bom = source.charCodeAt(0) === 0xfeff ? '﻿' : '';
+  return bom + lines.join(eol) + eol;
 }
 
 // Compares rows by their cells, so spacing and the separator style do not matter.
@@ -88,4 +111,4 @@ function tablesMatch(actual, expected) {
   return actual.every((line, i) => normalizeRow(line) === normalizeRow(expected[i]));
 }
 
-module.exports = { BLOCK_START, BLOCK_END, expectedRows, renderTable, extractBlock, tablesMatch };
+module.exports = { BLOCK_START, BLOCK_END, expectedRows, renderTable, extractBlock, tablesMatch, withTable };

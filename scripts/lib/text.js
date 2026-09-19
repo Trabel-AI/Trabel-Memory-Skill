@@ -16,4 +16,11 @@ function countLines(text) {
   return splitLines(text).length;
 }
 
-module.exports = { stripBom, splitLines, countLines };
+// A commit message line like "Docs-Unchanged: reason". A line with nothing
+// after the colon does not count.
+function hasTrailer(lines, key) {
+  const re = new RegExp('^' + key + ':\\s*\\S', 'i');
+  return lines.some((l) => re.test(l.trim()));
+}
+
+module.exports = { stripBom, splitLines, countLines, hasTrailer };

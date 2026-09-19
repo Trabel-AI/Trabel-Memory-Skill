@@ -1,0 +1,13 @@
+{
+  "name": "trabel",
+  "owner": {
+    "name": "Trabel"
+  },
+  "plugins": [
+    {
+      "name": "trabel-memory",
+      "source": "./",
+      "description": "Project memory that always describes the current state, with a git gate that keeps the docs in step with the code."
+    }
+  ]
+}
