@@ -1,7 +1,7 @@
 ---
 name: setup
 description: Sets up trabel-memory in the current project, once: state files per domain in docs/state, a queue in docs/NEXT.md, a block with rules and an index in CLAUDE.md, and the git gate that blocks commits whose code changed while its docs did not. Use when the person asks to set up project memory ("set up memory in this project", "תקים זיכרון בפרויקט הזה"), or when project instructions say to set it up where it does not exist yet.
-allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/*) Bash(node --version) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *) Bash(git log *) Bash(git config --get *)
+allowed-tools: Read(${CLAUDE_PLUGIN_ROOT}/**) Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/*) Bash(node --version) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *) Bash(git log *) Bash(git config --get *)
 ---
 
 # Set up project memory

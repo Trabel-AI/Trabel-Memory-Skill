@@ -22,3 +22,23 @@ test('the marketplace entry has no version', () => {
   assert.strictEqual('version' in entry, false);
   assert.strictEqual('version' in (market.metadata || {}), false);
 });
+
+// A plugin is installed with git. On Windows, git checks text files out with
+// CRLF line endings unless the repository says otherwise, and a skill whose
+// file has CRLF endings loses its allowed-tools: every script it runs then
+// stops to ask the person. .gitattributes keeps LF everywhere.
+test('.gitattributes keeps LF line endings on every checkout', () => {
+  const text = fs.readFileSync(path.join(__dirname, '..', '.gitattributes'), 'utf8');
+  assert.match(text, /^\* text=auto eol=lf$/m);
+});
+
+// Setup and save read files inside the plugin (rules.md, the save skill).
+// Those files are outside the person's project, so reading them asks for
+// approval unless the skill grants it.
+test('setup and save may read the plugin files without asking', () => {
+  for (const name of ['setup', 'save']) {
+    const text = fs.readFileSync(path.join(__dirname, '..', 'skills', name, 'SKILL.md'), 'utf8');
+    const line = text.split('\n').find((l) => l.startsWith('allowed-tools:'));
+    assert.ok(line && line.includes('Read(${CLAUDE_PLUGIN_ROOT}/**)'), name);
+  }
+});

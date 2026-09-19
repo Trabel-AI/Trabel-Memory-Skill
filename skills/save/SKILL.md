@@ -1,7 +1,7 @@
 ---
 name: save
 description: Saves work in a project with trabel-memory - updates the state files from the diff, runs the new-reader test on the changed lines, and commits code and docs together through the gate. Use at the end of meaningful work, when the person asks to save or commit ("save", "שמור"), or before stopping in the middle of a task. There is no need to ask separately for a docs update: it is part of saving.
-allowed-tools: Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/*) Bash(git status *) Bash(git diff *) Bash(git log *) Bash(git show *) Bash(git add *) Bash(git commit *) Bash(git rev-parse *) Bash(git ls-files *)
+allowed-tools: Read(${CLAUDE_PLUGIN_ROOT}/**) Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/*) Bash(git status *) Bash(git diff *) Bash(git log *) Bash(git show *) Bash(git add *) Bash(git commit *) Bash(git rev-parse *) Bash(git ls-files *)
 ---
 
 # Save
