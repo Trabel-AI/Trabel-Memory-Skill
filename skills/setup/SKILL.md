@@ -65,7 +65,7 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/install.js" --data "${CLAUDE_PLUGIN_DATA}"
 
 ## 6. The new-reader test
 
-Every state line is new, so the test reads whole files. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/reader.js"` and give its output, exactly as it is, as the whole prompt of the Agent tool with `subagent_type` `trabel-memory:reader`. Do not add anything to it: the reader must not know the project. It answers in JSON: for each failed line, the reason and what was missing. Check every answer with `reader.js --missing` exactly as the save does (`${CLAUDE_PLUGIN_ROOT}/skills/save/SKILL.md`, step 8): lines it skipped are sent once more, outside the two rounds, and a line still unanswered goes into the report as not checked. Rewrite each failed line so it states the current state, then run `reader.js` and the reader again. At most two rounds; what still fails goes into the report as lines that did not pass.
+Every state line is new, so the test reads whole files. Run it exactly as the save does (`${CLAUDE_PLUGIN_ROOT}/skills/save/SKILL.md`, step 8): `reader.js --data "${CLAUDE_PLUGIN_DATA}"`, its output as it is as the whole prompt of the Agent tool with `subagent_type` `trabel-memory:reader`, then `reader.js --missing` after each answer, rewriting failed lines for at most two rounds, and `reader.js --report` before the commit. Do not add anything to the reader's input: the reader must not know the project. You never pass the reader's answer to a script: the plugin catches it by itself.
 
 ## 7. Commit
 
@@ -78,5 +78,5 @@ In the person's language, short, no jargon:
 - What was created: the domains, one line each, and where the files are.
 - Whether the gate is on. If not, why and what would turn it on.
 - Anything not verified or found open, in one line each.
-- The new-reader test: how many lines, how many passed, how many were rewritten, and any line that was not checked.
+- The new-reader test: the lines `reader.js --report` printed, word for word.
 - One line on how it works from now: they work as usual; at the end of meaningful work you save (`/trabel-memory:save`), and the docs are updated with the code.

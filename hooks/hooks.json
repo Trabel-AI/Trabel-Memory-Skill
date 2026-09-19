@@ -11,6 +11,19 @@
           }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "^trabel-memory:reader$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/reader-hook.js", "--data", "${CLAUDE_PLUGIN_DATA}"],
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

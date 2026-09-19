@@ -125,7 +125,7 @@ All in the plugin's `scripts/` folder (the skill that sent you here gives its fu
 | `index.js [--with-rules]` | Rebuilds the index table in the CLAUDE.md block from the cards. `--with-rules` also writes the rules above it from the plugin's template |
 | `check.js` | Code with no owner, files over their ceiling, domains too broad |
 | `lag.js` | Code whose docs fell behind in earlier commits |
-| `reader.js` | The changed state lines, with their addresses, for the new-reader test |
+| `reader.js --data <folder> [--missing \| --report]` | The changed state lines, with their addresses, for the new-reader test; `--missing` the lines no captured answer covers; `--report` the report's lines about the test. The reader's answers are caught by the plugin itself, never passed in |
 | `open.js` | Every open item, oldest first |
 | `install.js --data <folder>` | Installs or repairs the git gate |
 

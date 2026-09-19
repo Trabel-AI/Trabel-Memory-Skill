@@ -178,7 +178,7 @@ test('lag.js --json and a project without memory', () => {
 
 // The plugin's own files
 
-test('plugin files: valid JSON, one name, and the hook points at a script that exists', () => {
+test('plugin files: valid JSON, one name, and two hooks that point at scripts that exist', () => {
   const read = (p) => JSON.parse(require('fs').readFileSync(path.join(PLUGIN, p), 'utf8'));
   const plugin = read('.claude-plugin/plugin.json');
   const market = read('.claude-plugin/marketplace.json');
@@ -186,10 +186,15 @@ test('plugin files: valid JSON, one name, and the hook points at a script that e
   assert.strictEqual(plugin.version, undefined); // updates follow the commits
   assert.deepStrictEqual(market.plugins.map((p) => [p.name, p.source]), [['trabel-memory', './']]);
   const hooks = read('hooks/hooks.json').hooks;
-  assert.deepStrictEqual(Object.keys(hooks), ['SessionStart']);
-  const h = hooks.SessionStart[0].hooks[0];
-  assert.strictEqual(h.command, 'node');
-  const target = h.args[0].replace('${CLAUDE_PLUGIN_ROOT}', PLUGIN);
-  assert.ok(require('fs').existsSync(target), target);
-  assert.deepStrictEqual(h.args.slice(1), ['--data', '${CLAUDE_PLUGIN_DATA}']);
+  assert.deepStrictEqual(Object.keys(hooks), ['SessionStart', 'SubagentStop']);
+  assert.strictEqual(hooks.SessionStart[0].matcher, undefined); // every source
+  assert.ok(new RegExp(hooks.SubagentStop[0].matcher).test('trabel-memory:reader'));
+  assert.ok(!new RegExp(hooks.SubagentStop[0].matcher).test('Explore'));
+  for (const [event, script] of [['SessionStart', 'session-start.js'], ['SubagentStop', 'reader-hook.js']]) {
+    const h = hooks[event][0].hooks[0];
+    assert.strictEqual(h.command, 'node');
+    assert.strictEqual(h.args[0], `${'${CLAUDE_PLUGIN_ROOT}'}/scripts/${script}`);
+    assert.ok(require('fs').existsSync(path.join(PLUGIN, 'scripts', script)), script);
+    assert.deepStrictEqual(h.args.slice(1), ['--data', '${CLAUDE_PLUGIN_DATA}']);
+  }
 });

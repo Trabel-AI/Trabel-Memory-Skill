@@ -59,11 +59,15 @@ In `docs/NEXT.md`, tick what this work completed. A queue whose items are all do
 
 ## 8. The new-reader test
 
-Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/reader.js"`. If it says no state lines changed, skip this step. Otherwise give its output, exactly as it is, as the whole prompt of the Agent tool with `subagent_type` `trabel-memory:reader`. Add nothing to it: the reader must not see the session, the diff or the project, because whoever wrote a line cannot judge it.
+Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/reader.js" --data "${CLAUDE_PLUGIN_DATA}"`. If it says no state lines changed, skip to step 9. Otherwise give its output, exactly as it is, as the whole prompt of the Agent tool with `subagent_type` `trabel-memory:reader`. Add nothing to it: the reader must not see the session, the diff or the project, because whoever wrote a line cannot judge it.
 
-The reader answers in JSON, one entry per id. It sometimes skips a line, so check every answer with the script, not by eye: pipe the answer, exactly as it came back, into `node "${CLAUDE_PLUGIN_ROOT}/scripts/reader.js" --missing` (a heredoc on stdin). If it prints "Every line has an answer.", go on. Otherwise its output is the input again with only the unanswered lines: give it to the reader as it is, then run `--missing` again with both answers on stdin, one after the other. This resend is not one of the two rounds below. A line still unanswered after it is reported as a line that was not checked; it never passes in silence.
+You never pass the reader's answer to a script. The plugin catches it by itself, straight from Claude Code, the moment the reader finishes, and the scripts read only what was caught; anything piped or typed into them is ignored.
 
-For each failed line (`unclear`, `story` or `diff`), rewrite it so it states the current state, using what the reader said was missing, then run `reader.js` and the reader again. At most two rounds. A line that still fails does not stop the save; it goes into the report.
+The reader sometimes skips a line. After each answer, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/reader.js" --missing --data "${CLAUDE_PLUGIN_DATA}"`. If it prints "Every line has an answer.", go on. Otherwise its output is the input again with only the unanswered lines: give it to the reader as it is, once. This resend is not one of the two rounds below.
+
+For each failed line (`unclear`, `story` or `diff`), rewrite it so it states the current state, using what the reader said was missing, then run `reader.js` and the reader again. At most two rounds. A line that still fails does not stop the save.
+
+Last, before the commit, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/reader.js" --report --data "${CLAUDE_PLUGIN_DATA}"`. Its lines are the report's lines about the test: how many lines, how many passed, how many were rewritten, and each line that did not pass or was not checked. Keep them for step 11 as they are. Do not count or add anything yourself; if it says the test did not run, that is what the report says.
 
 ## 9. Commit
 
@@ -82,9 +86,9 @@ Saved. Updated: commissions.md (the monthly report, the new table), architecture
 Not updated on purpose: customers.md. The change there was tidying with no change in behaviour.
 Open items: one closed (commission on a cancelled deal), one opened (the report was not checked against a month with no deals).
 The gate blocked once: a new file with no owner, assigned to commissions.
-New-reader test: 14 lines, 13 passed, one rewritten and passed.
+New-reader test: 14 lines, 13 passed, 1 rewritten.
 ```
 
-A line the reader never answered is named in the report as not checked, with its file.
+The lines about the new-reader test are the lines `reader.js --report` printed in step 8, word for word, translated only if the person speaks another language than the project.
 
 Include a new domain file if one was born, lagging docs completed from step 2, broad domains from step 6, and a gate that is not installed if `install.js` or the session start said so.

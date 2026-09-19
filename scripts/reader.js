@@ -9,21 +9,30 @@
 // table comes with the rest of that list or table, as context that is not
 // judged. A new state file is sent whole.
 //
-//   node reader.js [--json]
-//   node reader.js --missing < answers
+//   node reader.js [--data <folder>]            the input, and a new round
+//   node reader.js --missing [--data <folder>]  the lines no answer covers
+//   node reader.js --report [--data <folder>]   the lines for the report
+//   node reader.js --json
 //
-// The save hands this output, as it is, to the reader agent (agents/reader.md).
+// The save hands the input, as it is, to the reader agent (agents/reader.md).
 // tests/reader renders its fixed cases with the same render function.
 //
-// --missing reads the reader's answers on stdin (one or more, one after the
-// other) and prints the input again with only the lines no answer covers, so
-// they are sent again. A line is covered by an object in the answers with its
-// id and a "pass" of true or false; broken JSON around it does not matter.
+// Every run that prints the input starts a round in the project's record
+// (lib/readerRecord.js), in the plugin's data folder: --data, or found as the
+// installer finds it. The reader's answers reach that record only through the
+// SubagentStop hook (reader-hook.js), straight from Claude Code. --missing and
+// --report read nothing else: an answer typed in by hand does not count.
+// --missing prints the last round's input again with only the lines no
+// captured answer covers, so they are sent again; --report prints the
+// report's lines about the test, from the captured answers and the lines as
+// they are now.
 
 const { git, gitText, repoRoot, hasHead } = require('./lib/git');
 const S = require('./lib/settings');
 const { loadFromDisk } = require('./lib/project');
 const { splitLines } = require('./lib/text');
+const { findDataDir } = require('./lib/hook');
+const R = require('./lib/readerRecord');
 
 // Line numbers (1-based) of the lines added or changed since HEAD.
 function changedLineNumbers(root, file) {
@@ -157,20 +166,10 @@ function render(files) {
   return out.join('\n');
 }
 
-// The ids the answers cover: each {...} with an "id" and a boolean "pass".
-function answeredIds(answers) {
-  const ids = new Set();
-  for (const m of String(answers).matchAll(/\{[^{}]*\}/g)) {
-    const id = m[0].match(/"id"\s*:\s*"([^"]+)"/);
-    if (id && /"pass"\s*:\s*(true|false)/.test(m[0])) ids.add(id[1]);
-  }
-  return ids;
-}
-
 // The same files with only the judged lines no answer covers. Ids are kept:
 // a line keeps its id when it is sent again. Returns [] when all are covered.
 function missingFrom(files, answers) {
-  const done = answeredIds(answers);
+  const done = R.verdicts([].concat(answers));
   const out = [];
   files.forEach((f, k) => {
     const sections = f.sections
@@ -181,26 +180,116 @@ function missingFrom(files, answers) {
   return out.some(Boolean) ? out : [];
 }
 
+// { path, n, text, id } for every judged line.
+function judgedLines(files) {
+  const out = [];
+  files.forEach((f, k) => {
+    if (!f) return;
+    for (const s of f.sections) for (const l of s.lines) if (l.judged) out.push({ path: f.path, n: l.n, text: l.text, id: idOf(k, l.n) });
+  });
+  return out;
+}
+
+const REPORT = {
+  he: {
+    none: 'מבחן הקורא לא נדרש: לא השתנו שורות בקבצי המצב.',
+    notRun: 'מבחן הקורא: המבחן לא רץ.',
+    summary: (total, passed, rewritten) => `מבחן הקורא: ${total} שורות, עברו ${passed}${rewritten ? `, נכתבו מחדש ${rewritten}` : ''}.`,
+    failed: (n) => `לא עברו: ${n}.`,
+    unchecked: (n) => `לא נבדקו: ${n}.`,
+    line: (l) => `- ${l.path}, שורה ${l.n}: ${l.text.trim()}`,
+  },
+  en: {
+    none: 'The new-reader test was not needed: no state lines changed.',
+    notRun: 'New-reader test: the test did not run.',
+    summary: (total, passed, rewritten) => `New-reader test: ${total} lines, ${passed} passed${rewritten ? `, ${rewritten} rewritten` : ''}.`,
+    failed: (n) => `Did not pass: ${n}.`,
+    unchecked: (n) => `Not checked: ${n}.`,
+    line: (l) => `- ${l.path}, line ${l.n}: ${l.text.trim()}`,
+  },
+};
+
+// The report's lines about the test. It speaks only from captured answers,
+// about the lines as they are now: a line counts under the latest verdict
+// given to the same text in the same file; a line with none was not checked.
+// With no captured answer at all, the test did not run.
+function report(files, record, language) {
+  const M = REPORT[language === 'he' ? 'he' : 'en'];
+  const now = judgedLines(files);
+  if (!now.length) return M.none;
+  const rounds = record ? record.rounds : [];
+  const key = (l) => `${l.path}\n${l.text}`;
+  const latest = new Map();
+  const failedEver = new Set();
+  let any = false;
+  for (const r of rounds) {
+    const v = R.verdicts(r.answers);
+    for (const l of judgedLines(r.files)) {
+      if (!v.has(l.id)) continue;
+      any = true;
+      latest.set(key(l), v.get(l.id));
+      if (!v.get(l.id)) failedEver.add(key(l));
+    }
+  }
+  if (!any) return M.notRun;
+  const nowKeys = new Set(now.map(key));
+  const passed = now.filter((l) => latest.get(key(l)) === true);
+  const failed = now.filter((l) => latest.get(key(l)) === false);
+  const unchecked = now.filter((l) => !latest.has(key(l)));
+  const rewritten = [...failedEver].filter((k) => !nowKeys.has(k)).length;
+  const out = [M.summary(now.length, passed.length, rewritten)];
+  if (failed.length) out.push(M.failed(failed.length), ...failed.map(M.line));
+  if (unchecked.length) out.push(M.unchecked(unchecked.length), ...unchecked.map(M.line));
+  return out.join('\n');
+}
+
+function argValue(name) {
+  const i = process.argv.indexOf(name);
+  return i >= 0 ? process.argv[i + 1] : null;
+}
+
 if (require.main === module) {
   let output;
   let code = 0;
   try {
-    const files = collectChanged(repoRoot(process.cwd()));
+    const root = repoRoot(process.cwd());
+    const files = collectChanged(root);
+    const has = (flag) => process.argv.includes(flag);
     if (!files) {
       output = `No memory in this project: ${S.SETTINGS_PATH} does not exist.`;
       code = 1;
-    } else if (process.argv.includes('--missing')) {
-      const missing = missingFrom(files, require('fs').readFileSync(0, 'utf8'));
-      output = missing.length ? render(missing) : 'Every line has an answer.';
+    } else if (has('--json')) {
+      output = JSON.stringify(files, null, 2);
     } else {
-      output = process.argv.includes('--json') ? JSON.stringify(files, null, 2) : render(files);
+      const data = findDataDir({ given: argValue('--data') });
+      const head = hasHead(root) ? gitText(root, ['rev-parse', 'HEAD']).trim() : null;
+      if (has('--missing') || has('--report')) {
+        if (data.error) throw new Error(data.error);
+        const record = R.current(data.dir, root, head);
+        if (has('--report')) {
+          output = report(files, record, loadFromDisk(root).settings.language);
+        } else if (!record) {
+          output = 'No round of the new-reader test is open: run reader.js first, and give its output to the reader.';
+          code = 1;
+        } else {
+          const last = record.rounds[record.rounds.length - 1];
+          const missing = missingFrom(last.files, last.answers);
+          output = missing.length ? render(missing) : 'Every line has an answer.';
+        }
+      } else {
+        output = render(files);
+        if (files.length) {
+          if (data.error) process.stderr.write(`The reader's answers cannot be kept, so the report will say the test did not run. ${data.error}\n`);
+          else R.startRound(data.dir, root, head, files);
+        }
+      }
     }
   } catch (err) {
-    output = 'The changed lines could not be collected: ' + String((err && err.message) || err).split(/\r?\n/)[0];
+    output = 'The new-reader test could not be prepared: ' + String((err && err.message) || err).split(/\r?\n/)[0];
     code = 1;
   }
   process.stdout.write(output + '\n');
   process.exitCode = code;
 }
 
-module.exports = { collectChanged, describeFile, render, idOf, missingFrom };
+module.exports = { collectChanged, describeFile, render, idOf, missingFrom, report };

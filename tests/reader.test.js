@@ -86,7 +86,7 @@ test('reader: ids carry the file, so the same line number in two files is two id
   assert.strictEqual(ids[0].split('.')[1], ids[1].split('.')[1]);
 });
 
-test('reader: --missing sends again only the lines no answer covers, with the same ids', () => {
+test('reader: missingFrom keeps only the lines no answer covers, with the same ids', () => {
   const repo = repoWithMemory();
   const body = (name, lines) => card({ name, summary: name, owns: [`src/${name.toLowerCase()}/**`] }) + `# ${name}\n\n${lines}`;
   repo.write('docs/state/alpha.md', body('Alpha', 'First.\n\nSecond.\n'));
@@ -105,17 +105,4 @@ test('reader: --missing sends again only the lines no answer covers, with the sa
   // An entry with no verdict does not count; two answers together cover everything.
   assert.strictEqual(missingFrom(files, answer + '{"id":"' + id.Second + '"}').length > 0, true);
   assert.deepStrictEqual(missingFrom(files, answer + '\n{"results":[{"id":"' + id.Second + '","past":"","pass":true}]}'), []);
-});
-
-test('reader: --missing on the command line reads the answers on stdin', () => {
-  const { run, PLUGIN } = require('./helpers');
-  const path = require('path');
-  const repo = repoWithMemory();
-  repo.write('docs/state/alpha.md', card({ name: 'Alpha', summary: 'Alpha', owns: ['src/alpha/**'] }) + '# Alpha\n\nFirst.\n');
-  const script = path.join(PLUGIN, 'scripts', 'reader.js');
-  const id = render(collectChanged(repo.dir)).match(/^\[(F\d+\.L\d+)\]/m)[1];
-  const none = run(repo.dir, process.execPath, [script, '--missing'], { input: '' });
-  assert.ok(none.stdout.includes(`[${id}] First.`), none.stdout);
-  const all = run(repo.dir, process.execPath, [script, '--missing'], { input: `{"id":"${id}","pass":true}` });
-  assert.strictEqual(all.stdout.trim(), 'Every line has an answer.');
 });
