@@ -14,6 +14,11 @@ const DEFAULT_BUDGET = 300;
 const NEXT_BUDGET = 100;
 const RULES_BUDGET = 60;
 
+// A single pattern in a domain file may not take more than this share of the
+// code files, once the project has at least BROAD_MIN_FILES of them.
+const BROAD_SHARE = 0.4;
+const BROAD_MIN_FILES = 20;
+
 // Files that are never code. Projects add to this list in settings.json.
 const DEFAULT_IGNORE = [
   // package lock files
@@ -72,6 +77,6 @@ function makeIsCode(settings) {
 
 module.exports = {
   SETTINGS_PATH, STATE_DIR, NEXT_PATH, CLAUDE_PATH,
-  GATE_MODES, DEFAULT_BUDGET, NEXT_BUDGET, RULES_BUDGET, DEFAULT_IGNORE,
+  GATE_MODES, DEFAULT_BUDGET, NEXT_BUDGET, RULES_BUDGET, BROAD_SHARE, BROAD_MIN_FILES, DEFAULT_IGNORE,
   parseSettings, makeIsCode,
 };

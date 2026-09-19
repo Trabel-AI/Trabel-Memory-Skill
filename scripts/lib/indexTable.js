@@ -94,6 +94,28 @@ function withTable(text, table) {
   return bom + lines.join(eol) + eol;
 }
 
+// The CLAUDE.md text with the rules in the block replaced by `rules` (lines):
+// everything between the start marker and the index table, or the end of the
+// block when it has no table. Without a block, one holding only the rules is
+// added at the end. The rest of the file is kept exactly, line endings included.
+function withRules(text, rules) {
+  const source = text || '';
+  const eol = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source === '' ? [] : splitLines(source);
+  const block = extractBlock(source);
+  if (!block) {
+    if (lines.length && lines[lines.length - 1].trim() !== '') lines.push('');
+    lines.push(BLOCK_START, ...rules, BLOCK_END);
+  } else {
+    const until = block.tableStart >= 0 ? block.tableStart : block.end;
+    const gap = block.tableStart >= 0 ? [''] : [];
+    lines.splice(block.start + 1, until - block.start - 1, ...rules, ...gap);
+    if (block.end >= splitLines(source).length) lines.push(BLOCK_END);
+  }
+  const bom = source.charCodeAt(0) === 0xfeff ? '﻿' : '';
+  return bom + lines.join(eol) + eol;
+}
+
 // Compares rows by their cells, so spacing and the separator style do not matter.
 function normalizeRow(line) {
   let t = line.trim();
@@ -111,4 +133,4 @@ function tablesMatch(actual, expected) {
   return actual.every((line, i) => normalizeRow(line) === normalizeRow(expected[i]));
 }
 
-module.exports = { BLOCK_START, BLOCK_END, expectedRows, renderTable, extractBlock, tablesMatch, withTable };
+module.exports = { BLOCK_START, BLOCK_END, expectedRows, renderTable, extractBlock, tablesMatch, withTable, withRules };

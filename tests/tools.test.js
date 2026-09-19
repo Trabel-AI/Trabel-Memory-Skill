@@ -6,7 +6,9 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
 const { makeRepo, repoWithMemory, card, cleanup, run, PLUGIN } = require('./helpers');
-const { withTable, BLOCK_START, BLOCK_END } = require('../scripts/lib/indexTable');
+const fs = require('fs');
+const { withTable, withRules, extractBlock, BLOCK_START, BLOCK_END } = require('../scripts/lib/indexTable');
+const { RULES_BUDGET } = require('../scripts/lib/settings');
 const { collectOpen, render: renderOpen } = require('../scripts/open');
 const { findLag, render: renderLag } = require('../scripts/lag');
 
@@ -49,6 +51,36 @@ test('index: a block without a table gets one at its end; no block gets a block'
   assert.strictEqual(withTable(noTable, ['| a |']), ['x', BLOCK_START, '## Memory', 'rule', '', '| a |', BLOCK_END, ''].join('\n'));
   assert.strictEqual(withTable('# Project\n', ['| a |']), ['# Project', '', BLOCK_START, '| a |', BLOCK_END, ''].join('\n'));
   assert.strictEqual(withTable(null, ['| a |']), [BLOCK_START, '| a |', BLOCK_END, ''].join('\n'));
+});
+
+test('index: --with-rules writes the rules from the template in the project language, and the gate accepts it', () => {
+  for (const [language, heading] of [['he', '## זיכרון הפרויקט'], ['en', '## Project memory'], ['fr', '## Project memory']]) {
+    const repo = repoWithMemory({ language });
+    repo.write('CLAUDE.md', '# Mine\n\nKeep this.\n');
+    const r = node(repo, 'index.js', ['--with-rules']);
+    assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+    const text = repo.read('CLAUDE.md');
+    assert.ok(text.startsWith('# Mine\n\nKeep this.\n\n' + BLOCK_START + '\n' + heading + '\n'), text);
+    assert.ok(text.includes('| docs/state/customers.md |'), text);
+    passed(repo.commit('block'));
+    assert.ok(node(repo, 'index.js', ['--with-rules']).stdout.includes('up to date'));
+  }
+});
+
+test('index: --with-rules replaces old rules and keeps the table and the text outside', () => {
+  const before = ['# T', BLOCK_START, '## Old', 'old rule', '', '| a |', BLOCK_END, 'after'].join('\r\n') + '\r\n';
+  const after = withRules(before, ['## New', 'rule']);
+  assert.strictEqual(after, ['# T', BLOCK_START, '## New', 'rule', '', '| a |', BLOCK_END, 'after'].join('\r\n') + '\r\n');
+  assert.strictEqual(withRules('x\n', ['r']), ['x', '', BLOCK_START, 'r', BLOCK_END, ''].join('\n'));
+  assert.strictEqual(withRules([BLOCK_START, 'old'].join('\n'), ['r']), [BLOCK_START, 'r', BLOCK_END, ''].join('\n'));
+});
+
+test('index: both templates fit the 60-line ceiling of the rules', () => {
+  for (const lang of ['he', 'en']) {
+    const rules = fs.readFileSync(path.join(PLUGIN, 'templates', `block.${lang}.md`), 'utf8').replace(/\r\n/g, '\n').trimEnd().split('\n');
+    const text = withTable(withRules('', rules), ['| File | What |', '|---|---|']);
+    assert.ok(extractBlock(text).rulesLines <= RULES_BUDGET, `${lang}: ${extractBlock(text).rulesLines} lines`);
+  }
 });
 
 test('index: a project without memory is told so', () => {

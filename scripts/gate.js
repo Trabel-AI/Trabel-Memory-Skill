@@ -38,8 +38,6 @@ function libs() {
 // The command that rebuilds the index, named in the index message.
 const INDEX_COMMAND = `node "${path.join(__dirname, 'index.js').replace(/\\/g, '/')}"`;
 
-const BROAD_SHARE = 0.4;
-const BROAD_MIN_FILES = 20;
 const MAX_LISTED = 20;
 
 // Message lines, without git's comment lines and without the diff that
@@ -173,10 +171,10 @@ function runGate({ msgFile, cwd, state }) {
         continue;
       }
       if (!codeFiles) codeFiles = G.indexFiles(root).filter(isCode);
-      if (codeFiles.length < BROAD_MIN_FILES) continue;
+      if (codeFiles.length < S.BROAD_MIN_FILES) continue;
       const re = toRegExp(p);
       const n = codeFiles.filter((file) => re.test(file)).length;
-      if (n / codeFiles.length > BROAD_SHARE) {
+      if (n / codeFiles.length > S.BROAD_SHARE) {
         fail('pattern', t.broad(f.path, p, n, codeFiles.length, Math.round((100 * n) / codeFiles.length)));
       }
     }
