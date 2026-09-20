@@ -14,6 +14,11 @@ test.after(cleanup);
 const SOURCES = ['startup', 'resume', 'clear', 'compact', 'fork'];
 const SCRIPT = path.join(PLUGIN, 'scripts', 'session-start.js');
 
+// A new session (startup, clear) always gets the one line about "continue".
+const NEW_SESSION = ['startup', 'clear'];
+const CONTINUE_LINE = 'trabel-memory: If the user\'s first message only asks to go on ("continue", "המשך", or the like), run the skill trabel-memory:continue before anything else.\n';
+const quiet = (source) => (NEW_SESSION.includes(source) ? CONTINUE_LINE : '');
+
 function sessionStart(repo, source, { data = repo.dataDir, env = process.env, stdin } = {}) {
   const input = stdin != null ? stdin : JSON.stringify({ session_id: 'abc', hook_event_name: 'SessionStart', cwd: repo.dir, source });
   const args = data ? [SCRIPT, '--data', data] : [SCRIPT];
@@ -39,9 +44,35 @@ test('a folder outside git: silent', () => {
   assert.strictEqual(r.stdout, '');
 });
 
-test('everything committed: silent for every source', () => {
+test('everything committed: only the line about "continue", and only on a new session', () => {
   const repo = repoWithMemory();
-  for (const source of SOURCES) assert.strictEqual(sessionStart(repo, source), '', source);
+  for (const source of SOURCES) assert.strictEqual(sessionStart(repo, source), quiet(source), source);
+});
+
+test('a project that works from a plan: the line says where the work stands', () => {
+  const repo = repoWithMemory({ language: 'he' });
+  repo.write('docs/plan.md', '# התוכנית\n');
+  repo.write('docs/NEXT.md', '# התור\r\n\r\nהתוכנית: docs/plan.md\r\nסשן 2 מתוך 5: מסך הלקוחות\r\n\r\n- [ ] טופס\r\n\r\nהסשנים הבאים:\r\n3. א\r\n4. ב\r\n5. ג\r\n');
+  assert.strictEqual(repo.commit('לפי התוכנית').ok, true);
+  for (const source of SOURCES) {
+    const out = sessionStart(repo, source);
+    if (!NEW_SESSION.includes(source)) {
+      assert.strictEqual(out, '', source);
+      continue;
+    }
+    assert.ok(out.includes('This project works from a build plan: docs/plan.md, session 2 of 5.'), out);
+    assert.ok(out.includes('run the skill trabel-memory:continue'), out);
+    assert.ok(!out.includes('Problems in the queue'), out);
+  }
+});
+
+test('a queue whose plan section is out of shape, or whose plan file is gone: said on a new session', () => {
+  const repo = repoWithMemory();
+  repo.write('docs/NEXT.md', ['# Next', '', 'Plan: docs/plan.md', 'Session 2 of 5: Forms', '', 'Sessions left:', '3. a', '5. c', ''].join('\n'));
+  const out = sessionStart(repo, 'startup');
+  assert.ok(out.includes('The plan file docs/plan.md does not exist.'), out);
+  assert.ok(out.includes('Problems in the queue:'), out);
+  assert.ok(out.includes('must hold sessions 3, 4, 5') && out.includes('has no tasks'), out);
 });
 
 test('unsaved work: reported with owners and the queue, except on compact', () => {
@@ -61,6 +92,7 @@ test('unsaved work: reported with owners and the queue, except on compact', () =
     assert.ok(out.includes('- docs/NEXT.md (modified)'), out);
     assert.ok(out.includes('- [ ] step 2: the print page'), out);
     assert.ok(out.includes('Open your first reply with a short report'), out);
+    assert.strictEqual(out.includes('run the skill trabel-memory:continue'), NEW_SESSION.includes(source), source);
   }
 });
 
@@ -71,7 +103,7 @@ test('the hook and the linker are repaired on every opening, compact included', 
   for (const source of SOURCES) {
     fs.rmSync(hook);
     fs.writeFileSync(linker, '// an old plugin folder\n');
-    assert.strictEqual(sessionStart(repo, source), '', source);
+    assert.strictEqual(sessionStart(repo, source), quiet(source), source);
     assert.ok(fs.readFileSync(hook, 'utf8').includes('trabel-memory: the documentation gate'), source);
     assert.ok(fs.readFileSync(linker, 'utf8').includes(path.join(PLUGIN, 'scripts', 'gate.js').replace(/\\/g, '/')), source);
   }

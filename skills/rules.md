@@ -1,6 +1,6 @@
 # trabel-memory: how the memory is written
 
-Shared by the setup and save skills. The short version of these rules lives in the project's CLAUDE.md block, which every session reads; this file is the full version for the moments the files are written.
+Shared by the plugin's skills. The short version of these rules lives in the project's CLAUDE.md block, which every session reads; this file is the full version for the moments the files are written.
 
 ## The test behind every line
 
@@ -92,11 +92,52 @@ Where in the code: src/lib/commissions.ts, the monthlyReport function
 - Over a ceiling, shorten first: delete what the code already says clearly. Only if that is not enough, split into two domains, and ownership splits with them.
 - These always survive shortening and splitting: trap warnings, the evidence behind a risk item, the condition for closing an open item, and everything marked not verified.
 
+## Working from a plan
+
+A build of several sessions follows a plan: a file the person wrote, usually in plan mode, in any shape and any length.
+
+- **The plan is read, never written.** No script and no session changes a word in it, renumbers it or tidies it, unless the person explicitly asks; then the commit says so in a `Decision:` line. The plan is not a state file and not a log: where the work stands is written only in the queue.
+- `/trabel-memory:start-from-plan <path>` runs once: it writes the queue from the plan and starts session 1. Every later conversation opens with `/trabel-memory:continue` (or just "continue"): it checks the queue's tasks against the current session's part of the plan, and works. The save moves the queue from session to session.
+- The plan file is not code: it needs no owner, wherever it is.
+
+The queue while a plan is running, in the project's language:
+
+```
+# Next
+
+Plan: docs/plan.md
+Session 2 of 5: The customers screen (in the plan: chapter 3)
+
+- [x] The customers table
+- [ ] The new customer form
+
+Sessions left:
+3. Quotes (in the plan: chapter 4)
+4. Reports (in the plan: chapter 5)
+5. Using the product from the outside, like a new user (in the plan: chapter 6)
+```
+
+- The scripts recognise it by shape, in any language: a `label: path` line, and **directly below it** a line whose only two numbers before its first colon are N and then M (`סשן 2 מתוך 5: ...` in Hebrew). Both lines start at the margin with a letter. The path is from the repository root.
+- Under them, the tasks of session N only, a checkbox each. Below, the sessions left: one unindented line per session, `number. name (where in the plan)`, numbered N+1 to M, with no checkboxes. The last session has no list.
+- The plan section ends at the next `#` heading. Tasks that are not from the plan go below it, under their own `##` heading.
+- When every task is ticked, the save runs `plan.js --advance`: N goes up by one, the top line of the list becomes the session line, the rest of the list stays word for word, and the new session's tasks are written from its part of the plan. While a task is open, the queue stays on the session. After the last session, `plan.js --finish` deletes the plan file and takes the plan out of the queue, in the same commit; git keeps the plan, and there is no archive.
+- The gate blocks a queue that points at a plan that is not in git, and a session number that jumps or goes down. It blocks these unless the commit has a `Decision:` line: a list of sessions left that changed in any way other than its top line dropping, a changed plan file, and a plan deleted or dropped from the queue before the last session ended.
+- A queue without the two lines is a plain queue, and everything works as it does without a plan.
+
+What stays a judgement, and is reported rather than enforced: the division into sessions when Claude proposes it (the person approves it once); whether a task was left out of a session (the next conversation's `continue` checks the queue against the plan); whether a ticked task was done well (the save reports how it was checked, and the last session checks from the outside).
+
+### Writing a new plan
+
+This applies to a new plan only; an existing plan is never changed to fit it.
+
+- The last session in the plan uses the product from the outside - like a new user, from scratch, on temporary data, cleaning up after itself. It is not an internal check of the code.
+- Recommended, not enforced: write the plan already divided into sessions, each the size of one conversation, and write for each session how one knows it succeeded.
+
 ## Ownership
 
 - Each state file declares in `owns` the code paths it is responsible for. There is no separate map.
 - A pattern matches the full path from the repository root: `*` is any run of characters inside one folder, `**` as a whole segment is any number of folders (zero included), `?` is one character. `package.json` matches only the file at the root.
-- Code is every file in git that is not under `docs/`, is not a CLAUDE.md, is not an adopted file, and is not on the ignore list (lock files, images, generated files and tests by default; the project adds to it in `settings.json`).
+- Code is every file in git that is not under `docs/`, is not a CLAUDE.md, is not an adopted file, is not the plan file the queue points at, and is not on the ignore list (lock files, images, generated files and tests by default; the project adds to it in `settings.json`).
 - When several patterns match a file, the most exact one wins (more fixed characters). Only a tie gives a file two owners.
 - **No pattern may swallow new code,** because "code with no owner" is what catches a new domain:
   - `architecture.md` and `conventions.md` hold only explicit file paths, no stars. Code shared by all domains (helpers, project config) goes there by name.
@@ -127,6 +168,7 @@ All in the plugin's `scripts/` folder (the skill that sent you here gives its fu
 | `lag.js` | Code whose docs fell behind in earlier commits |
 | `reader.js --data <folder> [--missing \| --report]` | The changed state lines, with their addresses, for the new-reader test; `--missing` the lines no captured answer covers; `--report` the report's lines about the test. The reader's answers are caught by the plugin itself, never passed in |
 | `open.js` | Every open item, oldest first |
+| `plan.js [--advance \| --finish]` | Where the work stands in the plan, and what the gate would block; `--advance` moves the queue to the next session; `--finish` deletes the plan and takes it out of the queue after the last session |
 | `install.js --data <folder>` | Installs or repairs the git gate |
 
 Never edit the index table by hand; run `index.js`.

@@ -8,7 +8,7 @@ allowed-tools: Read(${CLAUDE_PLUGIN_ROOT}/**) Bash(node "${CLAUDE_PLUGIN_ROOT}/s
 
 The plugin's scripts are in `${CLAUDE_PLUGIN_ROOT}/scripts/`. Its data folder on this machine is `${CLAUDE_PLUGIN_DATA}`. Pass that path to the installer exactly as written here: the variable is not set in the shell.
 
-Run each command on its own, in exactly the forms listed in `allowed-tools`: no `cd` before it, no `&&` chains, no pipes. Read and search files with the Read, Grep and Glob tools, never with shell commands. Anything else stops to ask the person for approval, once per command.
+Run each command with the Bash tool (not PowerShell), on its own, in exactly the forms listed in `allowed-tools`: no `cd` before it, no `&&` chains, no pipes. Read and search files with the Read, Grep and Glob tools, never with shell commands. Anything else stops to ask the person for approval, once per command.
 
 Before writing any file, read `${CLAUDE_PLUGIN_ROOT}/skills/rules.md`. It holds the rules every line you write must follow.
 
@@ -81,4 +81,4 @@ In the person's language, short, no jargon:
 - Whether the gate is on. If not, why and what would turn it on.
 - Anything not verified or found open, in one line each.
 - The new-reader test: the lines `reader.js --report` printed, word for word.
-- One line on how it works from now: they work as usual; at the end of meaningful work you save (`/trabel-memory:save`), and the docs are updated with the code.
+- One line on how it works from now: they work as usual; at the end of meaningful work you save (`/trabel-memory:save`), and the docs are updated with the code. A new conversation picks the work up from the queue with one word, "continue" (`/trabel-memory:continue`).

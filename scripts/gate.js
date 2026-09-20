@@ -30,6 +30,7 @@ function libs() {
       ...require('./lib/text'),
       ...require('./lib/project'),
       ...require('./lib/messages'),
+      ...require('./lib/plan'),
     };
   }
   return L;
@@ -80,7 +81,7 @@ function loadStateFiles(root, settings) {
 function runGate({ msgFile, cwd, state }) {
   const {
     G, S, parseCard, hasStar, isAllStars, toRegExp, buildOwnership, findOpenItems, withoutOpenItems,
-    renderTable, extractBlock, tablesMatch, countLines, hasTrailer, messagesFor,
+    renderTable, extractBlock, tablesMatch, countLines, hasTrailer, messagesFor, parseQueue, checkPlan, planPathsOf,
   } = libs();
   const root = G.repoRoot(cwd);
   const settingsFile = path.join(root, S.SETTINGS_PATH);
@@ -107,7 +108,14 @@ function runGate({ msgFile, cwd, state }) {
     if (c.oldPath) changed.add(c.oldPath);
   }
 
-  const isCode = S.makeIsCode(settings);
+  // The queue, as the commit will leave it and as the last commit left it.
+  // The plan file it points at is not code, wherever it is.
+  const special = G.readBlobs(root, [':' + S.NEXT_PATH, ':' + S.CLAUDE_PATH, ...(withHead ? ['HEAD:' + S.NEXT_PATH] : [])]);
+  const nextText = special.get(':' + S.NEXT_PATH);
+  const claudeText = special.get(':' + S.CLAUDE_PATH);
+  const headNextText = withHead ? special.get('HEAD:' + S.NEXT_PATH) : null;
+
+  const isCode = S.makeIsCode(settings, planPathsOf(nextText, headNextText));
   const stateFiles = loadStateFiles(root, settings);
   const { ownersOf } = buildOwnership(stateFiles);
   const isStatePath = (p) => stateFiles.some((f) => f.path === p) || (p.startsWith(S.STATE_DIR) && p.endsWith('.md'));
@@ -186,9 +194,6 @@ function runGate({ msgFile, cwd, state }) {
     const n = countLines(f.text);
     if (n > f.budget) fail('budget', t.overBudget(f.path, n, f.budget));
   }
-  const special = G.readBlobs(root, [':' + S.NEXT_PATH, ':' + S.CLAUDE_PATH]);
-  const nextText = special.get(':' + S.NEXT_PATH);
-  const claudeText = special.get(':' + S.CLAUDE_PATH);
   if (changed.has(S.NEXT_PATH) && nextText != null) {
     const n = countLines(nextText);
     if (n > S.NEXT_BUDGET) fail('budget', t.overBudget(S.NEXT_PATH, n, S.NEXT_BUDGET));
@@ -225,6 +230,33 @@ function runGate({ msgFile, cwd, state }) {
     }
   }
 
+  // 6. Working from a plan. Runs when the queue, in this commit or in the last
+  // one, points at a plan file.
+  const queueBefore = parseQueue(headNextText);
+  const queueAfter = parseQueue(nextText);
+  if (queueBefore || queueAfter) {
+    const planChange = new Map();
+    for (const c of changes) {
+      planChange.set(c.path, c.status);
+      if (c.oldPath && c.status === 'R') planChange.set(c.oldPath, 'D');
+    }
+    const found = checkPlan({
+      before: queueBefore,
+      after: queueAfter,
+      exists: (p) => G.readBlobs(root, [':' + p]).get(':' + p) != null,
+      changeOf: (p) => planChange.get(p) || null,
+      decision: hasTrailer(message, 'Decision'),
+    });
+    for (const f of found) {
+      if (f.kind === 'planMissing') fail(f.kind, t.planMissing(f.plan));
+      else if (f.kind === 'planJump') fail(f.kind, t.planJump(f.from, f.to));
+      else if (f.kind === 'planBack') fail(f.kind, t.planBack(f.from, f.to));
+      else if (f.kind === 'planList') fail(f.kind, t.planList, f.expected.length ? [t.planListExpected, ...f.expected] : [t.planListNone]);
+      else if (f.kind === 'planEdited') fail(f.kind, t.planEdited(f.plan));
+      else fail('planDropped', t.planDropped(f.plan, f.n, f.m));
+    }
+  }
+
   if (!failures.length) return { exitCode: 0 };
   return {
     exitCode: settings.gate === 'warn' ? 0 : BLOCKED,
@@ -240,6 +272,12 @@ const FIXES = {
   budget: 'overBudgetFix',
   index: 'indexFix',
   vanished: 'vanishedFix',
+  planMissing: 'planMissingFix',
+  planJump: 'planJumpFix',
+  planBack: 'planBackFix',
+  planList: 'planListFix',
+  planEdited: 'planEditedFix',
+  planDropped: 'planDroppedFix',
 };
 
 function report(t, header, failures) {

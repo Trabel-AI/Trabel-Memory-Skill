@@ -15,7 +15,9 @@
 const { git, repoRoot, hasHead, indexFiles } = require('./lib/git');
 const S = require('./lib/settings');
 const { splitLines, hasTrailer } = require('./lib/text');
-const { loadFromDisk } = require('./lib/project');
+const path = require('path');
+const { loadFromDisk, readIfExists } = require('./lib/project');
+const { planPathsOf } = require('./lib/plan');
 const { buildOwnership } = require('./lib/owners');
 
 // Newest first: [{ hash, subject, exempt, files }]
@@ -37,7 +39,7 @@ function history(root) {
 function findLag(root) {
   const project = loadFromDisk(root);
   if (!project) return null;
-  const isCode = S.makeIsCode(project.settings);
+  const isCode = S.makeIsCode(project.settings, planPathsOf(readIfExists(path.join(root, S.NEXT_PATH))));
   const { ownersOf } = buildOwnership(project.stateFiles);
   const tracked = new Set(indexFiles(root));
   const documented = new Set(); // owners updated in a newer commit

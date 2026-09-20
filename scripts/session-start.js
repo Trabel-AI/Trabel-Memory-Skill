@@ -14,6 +14,8 @@
 //   linker with the plugin's current folder.
 // - On every opening except compact (the same session going on), it reports
 //   work that was not committed, with the queue, so Claude opens with a report.
+// - On a new session (startup, clear) it adds one line: a first message that
+//   only asks to go on runs the continue skill.
 // It never fails the session: an error becomes one line of context.
 
 const fs = require('fs');
@@ -23,6 +25,7 @@ const S = require('./lib/settings');
 const { loadFromDisk, readIfExists } = require('./lib/project');
 const { buildOwnership } = require('./lib/owners');
 const { findDataDir, install } = require('./lib/hook');
+const { planPathsOf, parseQueue } = require('./lib/plan');
 
 const MAX_FILES = 50;
 const MAX_QUEUE_LINES = 100;
@@ -63,7 +66,7 @@ function uncommitted(root) {
 function unsavedReport(root, project) {
   const changes = uncommitted(root);
   if (!changes.length) return null;
-  const isCode = S.makeIsCode(project.settings);
+  const isCode = S.makeIsCode(project.settings, planPathsOf(readIfExists(path.join(root, S.NEXT_PATH))));
   const { ownersOf } = buildOwnership(project.stateFiles);
   const out = ['trabel-memory: the previous session stopped before saving. These files have changes that are not committed:'];
   for (const c of changes.slice(0, MAX_FILES)) {
@@ -87,6 +90,19 @@ function unsavedReport(root, project) {
       'what they do now (read git status and git diff, not only this list), where the queue says the work stood, ' +
       'and whether the docs were already updated. Then continue or save as the user decides.',
   );
+  return out.join('\n');
+}
+
+// One line for a new session. A one-word "continue" does not reliably reach
+// the continue skill through its description alone. The continue skill runs
+// no commands, so where the plan stands, and what is wrong with the queue's
+// shape, is said here.
+function continueNote(root) {
+  const q = parseQueue(readIfExists(path.join(root, S.NEXT_PATH)));
+  const where = q ? `This project works from a build plan: ${q.plan}, session ${q.n} of ${q.m}. ` : '';
+  const out = [`trabel-memory: ${where}If the user's first message only asks to go on ("continue", "המשך", or the like), run the skill trabel-memory:continue before anything else.`];
+  if (q && !fs.existsSync(path.join(root, q.plan))) out.push(`The plan file ${q.plan} does not exist.`);
+  if (q && q.problems.length) out.push('Problems in the queue:', ...q.problems.map((p) => `- ${p}`));
   return out.join('\n');
 }
 
@@ -127,6 +143,7 @@ function run({ input, dataArg, env = process.env }) {
     if (project) {
       const report = unsavedReport(root, project);
       if (report) notes.push(report);
+      if (input.source === 'startup' || input.source === 'clear') notes.push(continueNote(root));
     }
   }
   return notes.join('\n\n');

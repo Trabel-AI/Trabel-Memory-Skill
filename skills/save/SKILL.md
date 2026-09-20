@@ -1,6 +1,6 @@
 ---
 name: save
-description: Saves work in a project with trabel-memory - updates the state files from the diff, runs the new-reader test on the changed lines, and commits code and docs together through the gate. Use at the end of meaningful work, when the person asks to save or commit ("save", "שמור"), or before stopping in the middle of a task. There is no need to ask separately for a docs update: it is part of saving.
+description: Saves work in a project with trabel-memory - updates the state files from the diff, runs the new-reader test on the changed lines, and commits code and docs together through the gate. Use at the end of meaningful work, when the person asks to save or commit ("save", "שמור"), or before stopping in the middle of a task. There is no need to ask separately for a docs update: it is part of saving. Start it with no arguments.
 allowed-tools: Read(${CLAUDE_PLUGIN_ROOT}/**) Bash(node "${CLAUDE_PLUGIN_ROOT}/scripts/*) Bash(git status *) Bash(git diff *) Bash(git log *) Bash(git show *) Bash(git add *) Bash(git commit *) Bash(git rev-parse *) Bash(git ls-files *)
 ---
 
@@ -8,7 +8,7 @@ allowed-tools: Read(${CLAUDE_PLUGIN_ROOT}/**) Bash(node "${CLAUDE_PLUGIN_ROOT}/s
 
 The plugin's scripts are in `${CLAUDE_PLUGIN_ROOT}/scripts/`. Read `${CLAUDE_PLUGIN_ROOT}/skills/rules.md` before changing a state file, unless you already read it in this session.
 
-Run each command on its own, in exactly the forms listed in `allowed-tools`: no `cd` before it, no `&&` chains, no pipes. Read and search files with the Read, Grep and Glob tools, never with shell commands. Anything else stops to ask the person for approval, once per command.
+Run each command with the Bash tool (not PowerShell), on its own, in exactly the forms listed in `allowed-tools`: no `cd` before it, no `&&` chains, no pipes. Read and search files with the Read, Grep and Glob tools, never with shell commands. Anything else stops to ask the person for approval, once per command.
 
 If `docs/state/settings.json` does not exist, the project has no memory: commit as usual, and suggest `/trabel-memory:setup` in one line.
 
@@ -57,7 +57,16 @@ Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/index.js" --with-rules`. It rebuil
 
 ## 7. The queue
 
-In `docs/NEXT.md`, tick what this work completed. A queue whose items are all done is replaced (with the next task if there is one, or emptied), never extended with history.
+In `docs/NEXT.md`, tick what this work completed: only what is really done and was checked. Then run `node "${CLAUDE_PLUGIN_ROOT}/scripts/plan.js"`. It reads the queue and says which of these holds:
+
+- **The queue has no plan reference:** a plain queue. A queue whose items are all done is replaced (with the next task if there is one, or emptied), never extended with history.
+- **The queue points at a plan, and tasks of the session are still open:** leave the queue as it is. The open tasks stay at its top and the session number does not move, so the next session picks them up.
+- **Every task of the session is ticked, and sessions are left:** run `node "${CLAUDE_PLUGIN_ROOT}/scripts/plan.js" --advance`. It rewrites the whole queue: the session number goes up by one, the top line of the list of sessions left becomes the session line, and the rest of the list stays word for word. Then read, in the plan file, only the part of the new session (its line says where), and write its tasks under the session line, a checkbox each: every task the plan names for it, none invented. Change nothing else in the queue.
+- **Every task of the last session is ticked:** run `node "${CLAUDE_PLUGIN_ROOT}/scripts/plan.js" --finish`. It deletes the plan file and takes the plan out of the queue; both go into this commit, and git keeps the plan. There is no archive. Whatever failed or was left out in the last session is written as open items in its domain file (step 5).
+
+If `plan.js` lists problems in the queue (the queue was just written from a plan, or edited by hand), fix the queue's shape as the section "Working from a plan" in rules.md describes, and run it again. If it says the plan file is not in git yet, add the plan file to this commit.
+
+The scripts do the counting; do not edit the session number or the list by hand. Never change the plan file itself: the person wrote it, and not a word of it changes unless they explicitly asked (then the commit gets a `Decision:` line saying what changed and why). After `--advance` or `--finish`, run `plan.js` once more: it says what the gate would block in this commit.
 
 ## 8. The new-reader test
 
@@ -92,5 +101,7 @@ New-reader test: 14 lines, 13 passed, 1 rewritten.
 ```
 
 The lines about the new-reader test are the lines `reader.js --report` printed in step 8, word for word, translated only if the person speaks another language than the project.
+
+When the project works from a plan, add: what was done in this session, what was not, how it was checked (tests run, the product used, or not checked), and what the next queue is - the number and name of the next session, the same session again with the tasks that stayed open, or that the plan is finished and its file deleted.
 
 Include a new domain file if one was born, lagging docs completed from step 2, broad domains from step 6, and a gate that is not installed if `install.js` or the session start said so.

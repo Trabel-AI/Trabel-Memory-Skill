@@ -64,14 +64,17 @@ function parseSettings(text) {
 }
 
 // Code: a tracked file outside docs/, not CLAUDE.md, not an adopted state file,
-// and not on the ignore list. Ignore patterns match without regard to case.
-function makeIsCode(settings) {
+// not the plan file the queue points at (notCode), and not on the ignore list.
+// Ignore patterns match without regard to case.
+function makeIsCode(settings, notCode = []) {
   const ignore = [...DEFAULT_IGNORE, ...settings.ignore].map((p) => toRegExp(p, 'i'));
   const adopted = new Set(settings.adopted.map((a) => a.path));
+  const plans = new Set(notCode);
   return (file) =>
     !file.startsWith('docs/') &&
     path.posix.basename(file) !== CLAUDE_PATH &&
     !adopted.has(file) &&
+    !plans.has(file) &&
     !ignore.some((re) => re.test(file));
 }
 

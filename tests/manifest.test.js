@@ -43,6 +43,36 @@ test('setup and save may read the plugin files without asking', () => {
   }
 });
 
+// A skill with allowed-tools needs the person's approval each time Claude
+// starts it on its own (from words, not from a slash command), and a skill
+// that Claude starts with an argument loses its pre-approved commands.
+// "continue" must work with one word and no questions, and start-from-plan
+// usually gets the plan path as an argument. So both ask for no tools and
+// run no commands: the save skill checks and commits for them.
+test('the plan skills ask for no tools in advance, and run no commands', () => {
+  for (const name of ['start-from-plan', 'continue']) {
+    const text = fs.readFileSync(path.join(__dirname, '..', 'skills', name, 'SKILL.md'), 'utf8');
+    assert.ok(!text.includes('\r'), name + ': LF line endings');
+    assert.ok(text.split('\n').includes('name: ' + name), name);
+    assert.ok(!/^allowed-tools:/m.test(text), name);
+    assert.ok(!text.includes('${CLAUDE_PLUGIN_ROOT}'), name);
+  }
+});
+
+// The queue's shape is written in two places, because start-from-plan cannot
+// read rules.md without asking: both must show the same example.
+test('start-from-plan and rules.md describe the same queue shape', () => {
+  const rules = fs.readFileSync(path.join(__dirname, '..', 'skills', 'rules.md'), 'utf8');
+  const skill = fs.readFileSync(path.join(__dirname, '..', 'skills', 'start-from-plan', 'SKILL.md'), 'utf8');
+  const { parseQueue } = require('../scripts/lib/plan');
+  const example = (text) => text.split('```').find((part) => /\nPlan: /.test(part));
+  for (const [name, text] of [['rules.md', rules], ['start-from-plan', skill]]) {
+    const q = parseQueue(example(text).replace(/^\w*\n/, ''));
+    assert.ok(q, name + ': the example is a queue the script recognises');
+    assert.deepStrictEqual(q.problems, [], name);
+  }
+});
+
 // Setup and save end in a commit: that is what the person asked for when
 // they ran them, so the commit must not stop to ask again.
 test('setup and save may commit without asking', () => {

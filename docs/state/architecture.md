@@ -24,13 +24,14 @@ owns:
 ## מה התוסף יוצר בפרויקט
 
 - הכל נמצא ב-`docs/` (קבצי מצב ב-`docs/state/`, התור ב-`docs/NEXT.md`), בבלוק שב-CLAUDE.md, ובהוק אחד בתיקיית הגיט המקומית. שום קובץ אחר של התוסף אינו מועתק לפרויקט.
+- תוכנית בנייה היא קובץ של האדם, לא של התוסף. התוסף קורא אותה, ומוחק אותה אחרי הסשן האחרון ([plan.md](plan.md)).
 - קיומו של `docs/state/settings.json` הוא הסימן שבפרויקט יש זיכרון. בלעדיו כל ההוקים והסקריפטים שותקים או מדווחים שאין זיכרון.
 - בתיקיית הנתונים של התוסף במחשב (`~/.claude/plugins/data/<id>/`) נשמרים המקשר של השער, עותק ההוק, והרשומות של מבחן הקורא. לעולם לא בתוך הפרויקט.
 
 ## מבנה המאגר
 
 - `.claude-plugin/`: זהות התוסף והקטלוג ([distribution.md](distribution.md)).
-- `skills/`: ארבעת הסקילים (`setup`, `save`, `open`, `guide`), וקובץ הכללים המשותף `rules.md`.
+- `skills/`: ששת הסקילים (`setup`, `save`, `start-from-plan`, `continue`, `open`, `guide`), וקובץ הכללים המשותף `rules.md`.
 - `agents/`: הבודק של מבחן הקורא החדש.
 - `templates/`: הכללים שבבלוק של CLAUDE.md, בעברית ובאנגלית.
 - `hooks/hooks.json`: שני ההוקים של Claude Code.
@@ -49,6 +50,7 @@ owns:
 | `reader.js`, `reader-hook.js` | הקלט, הסבבים והדיווח של מבחן הקורא, ותפיסת התשובה | [reader.md](reader.md) |
 | `session-start.js` | בודק פתיחת השיחה | [session.md](session.md) |
 | `open.js` | איסוף הפריטים הפתוחים | [open-guide.md](open-guide.md) |
+| `plan.js` | עבודה לפי תוכנית: איפה עומדים, מעבר לסשן הבא, וסיום התוכנית | [plan.md](plan.md) |
 
 ## ההוקים של Claude Code
 

@@ -24,6 +24,7 @@ const { buildOwnership } = require('./lib/owners');
 const { toRegExp } = require('./lib/glob');
 const { extractBlock } = require('./lib/indexTable');
 const { countLines } = require('./lib/text');
+const { planPathsOf } = require('./lib/plan');
 
 // Code files in the working folder: tracked and untracked, deleted ones left out.
 function workingCodeFiles(root, isCode) {
@@ -36,7 +37,7 @@ function workingCodeFiles(root, isCode) {
 function checkProject(root) {
   const project = loadFromDisk(root);
   if (!project) return null;
-  const isCode = S.makeIsCode(project.settings);
+  const isCode = S.makeIsCode(project.settings, planPathsOf(readIfExists(path.join(root, S.NEXT_PATH))));
   const code = workingCodeFiles(root, isCode);
   const { ownersOf } = buildOwnership(project.stateFiles);
 
