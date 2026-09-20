@@ -47,7 +47,7 @@ A large build takes several conversations. Its plan is a file you wrote, usually
 
 1. **Once, at the start:** `/trabel-memory:start-from-plan docs/plan.md`, or "start from the plan". A plan that is already divided into sessions is taken as it is. For one that is not, Claude proposes a division, each session the size of one conversation, and asks for one approval. If the last session is not a use of the product from the outside, Claude says so and asks whether to add one to the queue. Then it writes the queue, commits it, and starts session 1.
 2. **Every new conversation:** "continue". Claude reads only the current session's part of the plan and checks the queue's tasks against it. A task that is missing from the queue is added, and you are told. This is an independent check: this conversation did not write the queue.
-3. **Every save:** when every task of the session is ticked, the queue is rewritten for the next session. While tasks are open, they stay at the top and the session number does not move. After the last session the plan file is deleted and the queue is emptied, in the same commit. Git keeps the plan; there is no archive.
+3. **Every save:** when every task of the session is ticked, the queue is rewritten for the next session. While tasks are open, they stay at the top and the session number does not move. After the last session the plan file is deleted and the plan leaves the queue, in the same commit. Git keeps the plan; there is no archive.
 
 The queue while a plan is running:
 
@@ -88,9 +88,31 @@ claude plugin install trabel-memory@trabel --scope user
 
 Either way, open a new session afterwards, so the plugin loads. When `claude` is not on the PATH, the VS Code extension carries the binary at `~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/`.
 
-Updates arrive on their own: every commit to the main branch is a release.
-
 Requirements: git, and Node.js 18 or later (the gate and the scripts run on it, with no external packages). While the repository is private, installing needs a GitHub account with access to it, and git signed in to that account.
+
+## Updates
+
+Every commit to the main branch is a release, and there are no version numbers. Claude Code does not fetch it on its own: for a catalog that is not Anthropic's, automatic updates are off until you turn them on. The plugin says so once, in the first new session after it is installed.
+
+**Update by hand**, from a terminal:
+
+```
+claude plugin marketplace update trabel
+claude plugin update trabel-memory@trabel
+```
+
+The new version loads in the next session, or after `/reload-plugins` in an open one.
+
+**Turn on automatic updates**, once per machine. In Claude Code in a terminal: `/plugin`, then **Marketplaces**, choose `trabel`, then **Enable auto-update**. The VS Code extension has no such switch. There, open `~/.claude/settings.json`, find the `trabel` entry that the install wrote under `extraKnownMarketplaces`, and add one line to it:
+
+```json
+"trabel": {
+  "source": { "source": "github", "repo": "Trabel-AI/Trabel-Memory-Skill" },
+  "autoUpdate": true
+}
+```
+
+With it on, Claude Code checks for a new version within ten minutes after a session starts, and the new version loads in the next session. While the repository is private, this background check may fail now and then. Updating by hand always works.
 
 ## Exemptions
 

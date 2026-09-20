@@ -8,17 +8,20 @@
 //
 //   node session-start.js [--data <plugin data folder>]
 //
-// In a project without memory (no settings.json) it prints nothing.
-// Otherwise:
+// In a project with memory (it has settings.json):
 // - On every opening it makes sure the git hook is installed and rewrites the
 //   linker with the plugin's current folder.
 // - On every opening except compact (the same session going on), it reports
 //   work that was not committed, with the queue, so Claude opens with a report.
 // - On a new session (startup, clear) it adds one line: a first message that
 //   only asks to go on runs the continue skill.
+// In any folder, once per machine, on a new session: a note that the installed
+// plugin does not update by itself, while automatic updates are off.
+// In a project without memory it prints nothing else.
 // It never fails the session: an error becomes one line of context.
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { git, repoRoot } = require('./lib/git');
 const S = require('./lib/settings');
@@ -29,6 +32,7 @@ const { planPathsOf, parseQueue } = require('./lib/plan');
 
 const MAX_FILES = 50;
 const MAX_QUEUE_LINES = 100;
+const UPDATE_NOTE_FILE = 'update-note-given';
 
 function readStdin() {
   try {
@@ -106,7 +110,62 @@ function continueNote(root) {
   return out.join('\n');
 }
 
+function readJson(file) {
+  try {
+    const v = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+    return v && typeof v === 'object' ? v : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+// Once per machine, on a new session in any folder: Claude Code keeps
+// automatic updates off for a marketplace that is not Anthropic's, so a person
+// who installed the plugin stays on the installed version without knowing.
+// Only a copy that Claude Code lists as installed speaks (a copy loaded with
+// --plugin-dir has no marketplace), and only while neither of the two files
+// that hold the switch says it is on. A file in the data folder remembers that
+// it was said. Any failure here is silent.
+function updateNote({ input, dataArg, env }) {
+  try {
+    if (input.source !== 'startup' && input.source !== 'clear') return null;
+    const data = findDataDir({ given: dataArg, env });
+    if (data.error) return null; // nowhere to remember that it was said
+    const marker = path.join(data.dir, UPDATE_NOTE_FILE);
+    if (fs.existsSync(marker)) return null;
+
+    const config = env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+    const pluginRoot = path.resolve(__dirname, '..');
+    const plugins = readJson(path.join(config, 'plugins', 'installed_plugins.json')).plugins || {};
+    const id = Object.keys(plugins).find((key) =>
+      Array.isArray(plugins[key]) && plugins[key].some((p) => p && typeof p.installPath === 'string' && path.relative(p.installPath, pluginRoot) === ''));
+    if (!id || !id.includes('@')) return null;
+    const marketplace = id.slice(id.lastIndexOf('@') + 1);
+
+    const settingsFile = path.join(config, 'settings.json');
+    const isOn = (entries) => Boolean(entries && entries[marketplace] && entries[marketplace].autoUpdate === true);
+    if (isOn(readJson(settingsFile).extraKnownMarketplaces)) return null;
+    if (isOn(readJson(path.join(config, 'plugins', 'known_marketplaces.json')))) return null;
+
+    fs.mkdirSync(data.dir, { recursive: true });
+    fs.writeFileSync(marker, 'The note about automatic updates was given.\n');
+    return [
+      `trabel-memory: this plugin does not update by itself on this machine. Claude Code keeps automatic updates off for a marketplace that is not Anthropic's, and they are not turned on for the marketplace "${marketplace}".`,
+      "Tell the user now, once, in two or three plain sentences in the user's language, and give the two ways:",
+      `- Update by hand, from a terminal: claude plugin marketplace update ${marketplace}, and then: claude plugin update ${id}. The new version loads in the next session.`,
+      `- Turn automatic updates on, once: in Claude Code in a terminal, /plugin, Marketplaces, "${marketplace}", Enable auto-update. Anywhere else, including the VS Code extension: add "autoUpdate": true to the "${marketplace}" entry under extraKnownMarketplaces in ${settingsFile.replace(/\\/g, '/')}. You can offer to add that line for the user.`,
+      'This note is given once and does not come back.',
+    ].join('\n');
+  } catch (e) {
+    return null;
+  }
+}
+
 function run({ input, dataArg, env = process.env }) {
+  return [projectNotes({ input, dataArg, env }), updateNote({ input, dataArg, env })].filter(Boolean).join('\n\n');
+}
+
+function projectNotes({ input, dataArg, env }) {
   let root;
   try {
     root = repoRoot(input.cwd || process.cwd());

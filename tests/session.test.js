@@ -19,12 +19,31 @@ const NEW_SESSION = ['startup', 'clear'];
 const CONTINUE_LINE = 'trabel-memory: If the user\'s first message only asks to go on ("continue", "המשך", or the like), run the skill trabel-memory:continue before anything else.\n';
 const quiet = (source) => (NEW_SESSION.includes(source) ? CONTINUE_LINE : '');
 
-function sessionStart(repo, source, { data = repo.dataDir, env = process.env, stdin } = {}) {
+// The tests never read the Claude Code folder of the machine they run on: a
+// test that does not bring its own gets an empty one.
+const NO_CONFIG = tempDir('trabel-no-config-');
+
+function sessionStart(repo, source, { data = repo.dataDir, env = process.env, stdin, config } = {}) {
   const input = stdin != null ? stdin : JSON.stringify({ session_id: 'abc', hook_event_name: 'SessionStart', cwd: repo.dir, source });
   const args = data ? [SCRIPT, '--data', data] : [SCRIPT];
-  const r = run(repo.dir, process.execPath, args, { input, env });
+  const full = { ...env };
+  if (config || full.CLAUDE_CONFIG_DIR === process.env.CLAUDE_CONFIG_DIR) full.CLAUDE_CONFIG_DIR = config || NO_CONFIG;
+  const r = run(repo.dir, process.execPath, args, { input, env: full });
   assert.strictEqual(r.status, 0, r.stderr);
   return r.stdout;
+}
+
+// A Claude Code folder in which this copy of the plugin is the installed one,
+// from the marketplace "trabel".
+function configDir({ installPath = PLUGIN, settings, known, installed } = {}) {
+  const dir = tempDir('trabel-config-');
+  fs.mkdirSync(path.join(dir, 'plugins'), { recursive: true });
+  const source = { source: 'github', repo: 'someone/some-repo' };
+  const write = (file, value) => fs.writeFileSync(path.join(dir, file), typeof value === 'string' ? value : JSON.stringify(value, null, 2));
+  write('plugins/installed_plugins.json', installed || { version: 2, plugins: { 'trabel-memory@trabel': [{ scope: 'user', installPath, version: 'abc123' }] } });
+  write('plugins/known_marketplaces.json', known || { trabel: { source, installLocation: path.join(dir, 'plugins', 'marketplaces', 'trabel') } });
+  write('settings.json', settings || { extraKnownMarketplaces: { trabel: { source } } });
+  return dir;
 }
 
 test('a project without memory: silent for every source', () => {
@@ -152,4 +171,65 @@ test('broken settings.json: one line of context, and the session goes on', () =>
   repo.write('docs/state/settings.json', '{ not json');
   const out = sessionStart(repo, 'startup');
   assert.ok(out.includes('settings.json could not be read'), out);
+});
+
+// --- the one-time note about updates ---
+
+const UPDATE_NOTE = 'this plugin does not update by itself on this machine';
+
+test('an installed copy with automatic updates off: said once, in any folder', () => {
+  const config = configDir();
+  const repo = makeRepo({ installHook: false }); // no memory here
+  const first = sessionStart(repo, 'startup', { config });
+  assert.ok(first.includes(UPDATE_NOTE), first);
+  assert.ok(first.includes('claude plugin marketplace update trabel'), first);
+  assert.ok(first.includes('claude plugin update trabel-memory@trabel'), first);
+  assert.ok(first.includes('"autoUpdate": true'), first);
+  assert.ok(first.includes(path.join(config, 'settings.json').replace(/\\/g, '/')), first);
+  assert.strictEqual(sessionStart(repo, 'startup', { config }), '');
+
+  const withMemory = repoWithMemory();
+  assert.strictEqual(sessionStart(withMemory, 'startup', { config, data: repo.dataDir }), CONTINUE_LINE);
+});
+
+test('the note about updates comes after the rest, in a project with memory', () => {
+  const repo = repoWithMemory();
+  const out = sessionStart(repo, 'clear', { config: configDir() });
+  assert.ok(out.startsWith(CONTINUE_LINE.trimEnd()), out);
+  assert.ok(out.includes(UPDATE_NOTE), out);
+});
+
+test('the note about updates waits for a new session', () => {
+  const config = configDir();
+  const repo = makeRepo({ installHook: false });
+  for (const source of ['resume', 'compact', 'fork']) assert.strictEqual(sessionStart(repo, source, { config }), '', source);
+  assert.ok(sessionStart(repo, 'startup', { config }).includes(UPDATE_NOTE));
+});
+
+test('automatic updates already on, in either file: no note, and nothing is remembered', () => {
+  const source = { source: 'github', repo: 'someone/some-repo' };
+  const repo = makeRepo({ installHook: false });
+  const inSettings = configDir({ settings: { extraKnownMarketplaces: { trabel: { source, autoUpdate: true } } } });
+  const inKnown = configDir({ known: { trabel: { source, autoUpdate: true } } });
+  assert.strictEqual(sessionStart(repo, 'startup', { config: inSettings }), '');
+  assert.strictEqual(sessionStart(repo, 'startup', { config: inKnown }), '');
+  assert.ok(sessionStart(repo, 'startup', { config: configDir() }).includes(UPDATE_NOTE));
+});
+
+test('a copy that is not the installed one (--plugin-dir): no note', () => {
+  const repo = makeRepo({ installHook: false });
+  const config = configDir({ installPath: path.join(tempDir('trabel-cache-'), 'trabel-memory', 'abc123') });
+  assert.strictEqual(sessionStart(repo, 'startup', { config }), '');
+});
+
+test('Claude Code files that cannot be read, or no data folder: no note, and the session goes on', () => {
+  const repo = makeRepo({ installHook: false });
+  assert.strictEqual(sessionStart(repo, 'startup', { config: configDir({ installed: '{ not json' }) }), '');
+  assert.strictEqual(sessionStart(repo, 'startup', { config: configDir({ installed: { version: 2 } }) }), '');
+  const broken = configDir({ settings: '{ not json', known: '[]' });
+  assert.ok(sessionStart(repo, 'startup', { config: broken }).includes(UPDATE_NOTE));
+
+  const env = { ...process.env };
+  delete env.CLAUDE_PLUGIN_DATA;
+  assert.strictEqual(sessionStart(repo, 'startup', { config: configDir(), data: null, env }), '');
 });
