@@ -44,7 +44,7 @@
 
 ## התקנה
 
-המאגר הוא גם התוסף וגם הקטלוג שלו. ב-Claude Code:
+המאגר הוא גם התוסף וגם הקטלוג שלו. ב-Claude Code בטרמינל:
 
 </div>
 
@@ -54,6 +54,19 @@
 ```
 
 <div dir="rtl">
+
+בתוסף של VS Code הפקודה `/plugin` אינה קיימת. אותם שני צעדים, מהטרמינל:
+
+</div>
+
+```
+claude plugin marketplace add Trabel-AI/Trabel-Memory-Skill
+claude plugin install trabel-memory@trabel --scope user
+```
+
+<div dir="rtl">
+
+בשתי הדרכים פותחים אחר כך שיחה חדשה, כדי שהתוסף ייטען. כש-`claude` אינו ב-PATH, קובץ ההרצה נמצא בתוסף של VS Code, ב-`~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/`.
 
 עדכונים מגיעים לבד: כל קומיט בענף הראשי הוא גרסה.
 

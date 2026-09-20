@@ -20,11 +20,17 @@ owns:
 
 ## מה המשתמש רואה ועושה
 
-- התקנה בשתי פקודות ב-Claude Code:
+- התקנה בשני צעדים, הוספת הקטלוג והתקנת התוסף. ב-Claude Code בטרמינל:
   ```
   /plugin marketplace add Trabel-AI/Trabel-Memory-Skill
   /plugin install trabel-memory@trabel
   ```
+  בתוסף של VS Code הפקודה `/plugin` אינה קיימת, ואותם שני צעדים רצים מהטרמינל:
+  ```
+  claude plugin marketplace add Trabel-AI/Trabel-Memory-Skill
+  claude plugin install trabel-memory@trabel --scope user
+  ```
+  בשתי הדרכים התוסף נטען בשיחה הבאה. המסלול מהטרמינל נבדק ב-Windows: הקטלוג נוסף, התוסף הותקן בהיקף user, הגרסה שהותקנה היא מזהה הקומיט, וקבצי הסקילים יצאו עם סוף שורה LF.
 - עדכונים מגיעים לבד. אין מספר גרסה ואין שלב שחרור.
 - דרישות: גיט, ו-Node.js 18 ומעלה. כל עוד המאגר פרטי, ההתקנה דורשת חשבון גיטהאב עם גישה אליו, וגיט מחובר לחשבון הזה.
 - שם התוסף, שהוא גם הקידומת של הפקודות, הוא `trabel-memory`. הפקודות: `setup`, `save`, `open`, `guide`. גם בקשה במילים מפעילה אותן. `/memory` לבדה היא פקודה מובנית של Claude Code ואינה פנויה.

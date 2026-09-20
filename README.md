@@ -42,12 +42,21 @@ Other commands: `/trabel-memory:open` lists every open item in the project, olde
 
 ## Install
 
-The repository is both the plugin and its catalog. In Claude Code:
+The repository is both the plugin and its catalog. In Claude Code in a terminal:
 
 ```
 /plugin marketplace add Trabel-AI/Trabel-Memory-Skill
 /plugin install trabel-memory@trabel
 ```
+
+In the VS Code extension `/plugin` does not exist. The same two steps, from a terminal:
+
+```
+claude plugin marketplace add Trabel-AI/Trabel-Memory-Skill
+claude plugin install trabel-memory@trabel --scope user
+```
+
+Either way, open a new session afterwards, so the plugin loads. When `claude` is not on the PATH, the VS Code extension carries the binary at `~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/`.
 
 Updates arrive on their own: every commit to the main branch is a release.
 
