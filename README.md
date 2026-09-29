@@ -88,7 +88,7 @@ claude plugin install trabel-memory@trabel --scope user
 
 Either way, open a new session afterwards, so the plugin loads. When `claude` is not on the PATH, the VS Code extension carries the binary at `~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/`.
 
-Requirements: git, and Node.js 18 or later (the gate and the scripts run on it, with no external packages). While the repository is private, installing needs a GitHub account with access to it, and git signed in to that account.
+Requirements: git, and Node.js 18 or later (the gate and the scripts run on it, with no external packages). Installing needs no GitHub account.
 
 ## Updates
 
@@ -112,7 +112,7 @@ The new version loads in the next session, or after `/reload-plugins` in an open
 }
 ```
 
-With it on, Claude Code checks for a new version within ten minutes after a session starts, and the new version loads in the next session. While the repository is private, this background check may fail now and then. Updating by hand always works.
+With it on, Claude Code checks for a new version within ten minutes after a session starts, and the new version loads in the next session. If a new version does not arrive, update by hand: that always works.
 
 ## Exemptions
 
