@@ -81,4 +81,4 @@ In the person's language, short, no jargon:
 - Whether the gate is on. If not, why and what would turn it on.
 - Anything not verified or found open, in one line each.
 - The new-reader test: the lines `reader.js --report` printed, word for word.
-- One line on how it works from now: they work as usual; at the end of meaningful work you save (`/trabel-memory:save`), and the docs are updated with the code. A new conversation picks the work up from the queue with one word, "continue" (`/trabel-memory:continue`).
+- One line on how it works from now: they work as usual; at the end of meaningful work you save (`/trabel-memory:save`), and the docs are updated with the code. A new conversation picks the work up from the queue with "continue from the plan" (`/trabel-memory:continue`).

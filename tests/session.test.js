@@ -14,9 +14,10 @@ test.after(cleanup);
 const SOURCES = ['startup', 'resume', 'clear', 'compact', 'fork'];
 const SCRIPT = path.join(PLUGIN, 'scripts', 'session-start.js');
 
-// A new session (startup, clear) always gets the one line about "continue".
+// A new session (startup, clear) always gets the one line about continuing
+// from the plan.
 const NEW_SESSION = ['startup', 'clear'];
-const CONTINUE_LINE = 'trabel-memory: If the user\'s first message only asks to go on ("continue", "המשך", or the like), run the skill trabel-memory:continue before anything else.\n';
+const CONTINUE_LINE = 'trabel-memory: If the user asks to go on from the plan or the queue ("continue from the plan", "המשך על פי תוכנית", or the like), run the skill trabel-memory:continue before anything else. A bare "continue" or "המשך" does not run it: it means go on with the work that was interrupted.\n';
 const quiet = (source) => (NEW_SESSION.includes(source) ? CONTINUE_LINE : '');
 
 // The tests never read the Claude Code folder of the machine they run on: a
@@ -63,7 +64,7 @@ test('a folder outside git: silent', () => {
   assert.strictEqual(r.stdout, '');
 });
 
-test('everything committed: only the line about "continue", and only on a new session', () => {
+test('everything committed: only the line about continuing from the plan, and only on a new session', () => {
   const repo = repoWithMemory();
   for (const source of SOURCES) assert.strictEqual(sessionStart(repo, source), quiet(source), source);
 });

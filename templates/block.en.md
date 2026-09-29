@@ -30,6 +30,6 @@ The files in the table below describe the project as it is now. Read the queue, 
 - The table below is built from the cards automatically. Do not edit it by hand.
 
 ### Working from a plan
-- A build of several sessions from a plan file: `/trabel-memory:start-from-plan <path>` writes the queue from the plan, once. Every new conversation opens with `/trabel-memory:continue` (or "continue"), and the save moves the queue from session to session.
+- A build of several sessions from a plan file: `/trabel-memory:start-from-plan <path>` writes the queue from the plan, once. Every new conversation opens with `/trabel-memory:continue` (or "continue from the plan"; a bare "continue" means go on with the work that was interrupted), and the save moves the queue from session to session.
 - Not a word of the plan file changes unless the person explicitly asks. Where the work stands is written only in the queue.
 - For a new plan only: The last session in the plan uses the product from the outside - like a new user, from scratch, on temporary data, cleaning up after itself. It is not an internal check of the code. It is recommended to write the plan divided into sessions the size of one conversation, and for each session how one knows it succeeded.

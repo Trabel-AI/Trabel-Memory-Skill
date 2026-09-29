@@ -1,13 +1,13 @@
 ---
 name: continue
-description: Continues the work at the start of a session in a project with trabel-memory - reads the queue in docs/NEXT.md, and when the project works from a build plan, checks the queue's tasks against the current session's part of the plan, then opens only the state files the tasks touch and starts working. Use when the person's FIRST message in a session is just a word or a short phrase asking to go on - "continue", "המשך", "תמשיך", "continue from the queue", "המשך לפי התור", "המשך לפי docs/NEXT.md", "keep going with the plan". Not in the middle of a session - there "continue" simply means go on with what you were doing.
+description: Continues the work at the start of a session in a project with trabel-memory - reads the queue in docs/NEXT.md, and when the project works from a build plan, checks the queue's tasks against the current session's part of the plan, then opens only the state files the tasks touch and starts working. Use when the person asks, in words that name the plan or the queue, to go on from it - "continue from the plan", "continue from the queue", "keep going with the plan", "המשך על פי תוכנית", "המשך לפי התוכנית", "המשך לפי התור", "המשך לפי docs/NEXT.md". Not for a bare "continue", "המשך" or "תמשיך", even as the first message of a session - that means go on with the work that was interrupted, and does not start this skill.
 ---
 
 # Continue
 
-This skill runs no commands: read and search files with the Read, Grep and Glob tools only. That is on purpose. A skill that asks for tools in advance needs the person's approval each time Claude starts it, and "continue" must work with one word and no questions.
+This skill runs no commands: read and search files with the Read, Grep and Glob tools only. That is on purpose. A skill that asks for tools in advance needs the person's approval each time Claude starts it, and a request to continue from the plan must work with no questions.
 
-If work is already under way in this conversation, this skill is not needed: "continue" in the middle of a session means go on with what you were doing. Do that.
+A bare "continue" or "המשך" does not start this skill, at any point of a conversation: the person means the work that was interrupted (a session that ran out, a machine that went down), not the queue. If that is all they wrote, this skill is not needed: go on with what was being done.
 
 If `docs/state/settings.json` does not exist, the project has no memory: say so, suggest `/trabel-memory:setup` in one line, and stop.
 

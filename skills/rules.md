@@ -97,7 +97,7 @@ Where in the code: src/lib/commissions.ts, the monthlyReport function
 A build of several sessions follows a plan: a file the person wrote, usually in plan mode, in any shape and any length.
 
 - **The plan is read, never written.** No script and no session changes a word in it, renumbers it or tidies it, unless the person explicitly asks; then the commit says so in a `Decision:` line. The plan is not a state file and not a log: where the work stands is written only in the queue.
-- `/trabel-memory:start-from-plan <path>` runs once: it writes the queue from the plan and starts session 1. Every later conversation opens with `/trabel-memory:continue` (or just "continue"): it checks the queue's tasks against the current session's part of the plan, and works. The save moves the queue from session to session.
+- `/trabel-memory:start-from-plan <path>` runs once: it writes the queue from the plan and starts session 1. Every later conversation opens with `/trabel-memory:continue` (or "continue from the plan"; a bare "continue" means go on with the work that was interrupted, and does not run it): it checks the queue's tasks against the current session's part of the plan, and works. The save moves the queue from session to session.
 - The plan file is not code: it needs no owner, wherever it is.
 
 The queue while a plan is running, in the project's language:

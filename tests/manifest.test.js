@@ -46,7 +46,7 @@ test('setup and save may read the plugin files without asking', () => {
 // A skill with allowed-tools needs the person's approval each time Claude
 // starts it on its own (from words, not from a slash command), and a skill
 // that Claude starts with an argument loses its pre-approved commands.
-// "continue" must work with one word and no questions, and start-from-plan
+// A request to continue from the plan must work with no questions, and start-from-plan
 // usually gets the plan path as an argument. So both ask for no tools and
 // run no commands: the save skill checks and commits for them.
 test('the plan skills ask for no tools in advance, and run no commands', () => {

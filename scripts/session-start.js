@@ -13,8 +13,9 @@
 //   linker with the plugin's current folder.
 // - On every opening except compact (the same session going on), it reports
 //   work that was not committed, with the queue, so Claude opens with a report.
-// - On a new session (startup, clear) it adds one line: a first message that
-//   only asks to go on runs the continue skill.
+// - On a new session (startup, clear) it adds one line: a request to go on
+//   from the plan or the queue runs the continue skill, a bare "continue"
+//   does not.
 // In any folder, once per machine, on a new session: a note that the installed
 // plugin does not update by itself, while automatic updates are off.
 // In a project without memory it prints nothing else.
@@ -97,14 +98,15 @@ function unsavedReport(root, project) {
   return out.join('\n');
 }
 
-// One line for a new session. A one-word "continue" does not reliably reach
-// the continue skill through its description alone. The continue skill runs
-// no commands, so where the plan stands, and what is wrong with the queue's
-// shape, is said here.
+// One line for a new session. Only a request that names the plan or the
+// queue runs the continue skill: a bare "continue" is what a person writes
+// after a session was cut off, and must not start the queue over the work
+// that was interrupted. The continue skill runs no commands, so where the
+// plan stands, and what is wrong with the queue's shape, is said here.
 function continueNote(root) {
   const q = parseQueue(readIfExists(path.join(root, S.NEXT_PATH)));
   const where = q ? `This project works from a build plan: ${q.plan}, session ${q.n} of ${q.m}. ` : '';
-  const out = [`trabel-memory: ${where}If the user's first message only asks to go on ("continue", "המשך", or the like), run the skill trabel-memory:continue before anything else.`];
+  const out = [`trabel-memory: ${where}If the user asks to go on from the plan or the queue ("continue from the plan", "המשך על פי תוכנית", or the like), run the skill trabel-memory:continue before anything else. A bare "continue" or "המשך" does not run it: it means go on with the work that was interrupted.`];
   if (q && !fs.existsSync(path.join(root, q.plan))) out.push(`The plan file ${q.plan} does not exist.`);
   if (q && q.problems.length) out.push('Problems in the queue:', ...q.problems.map((p) => `- ${p}`));
   return out.join('\n');
