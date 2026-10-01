@@ -92,9 +92,11 @@ Requirements: git, and Node.js 18 or later (the gate and the scripts run on it, 
 
 ## Updates
 
-Every commit to the main branch is a release, and there are no version numbers. Claude Code does not fetch it on its own: for a catalog that is not Anthropic's, automatic updates are off until you turn them on. The plugin says so once, in the first new session after it is installed.
+Every commit to the main branch is a release, and there are no version numbers. For a catalog that is not Anthropic's, Claude Code keeps automatic updates off, so the plugin turns them on for its own catalog, once per machine, in the first new session after it is installed, and tells you so. From then on Claude Code checks for a new version within ten minutes after a session starts, and the new version loads in the next session.
 
-**Update by hand**, from a terminal:
+**Turn automatic updates off**, if you want to: in Claude Code in a terminal, `/plugin`, then **Marketplaces**, choose `trabel`, then **Disable auto-update**. Anywhere else, including the VS Code extension: open `~/.claude/settings.json`, find the `trabel` entry under `extraKnownMarketplaces`, and remove its `"autoUpdate": true` line. The plugin turns it on once per machine, so it stays off.
+
+**Update by hand**, from a terminal, if a new version does not arrive:
 
 ```
 claude plugin marketplace update trabel
@@ -102,17 +104,6 @@ claude plugin update trabel-memory@trabel
 ```
 
 The new version loads in the next session, or after `/reload-plugins` in an open one.
-
-**Turn on automatic updates**, once per machine. In Claude Code in a terminal: `/plugin`, then **Marketplaces**, choose `trabel`, then **Enable auto-update**. The VS Code extension has no such switch. There, open `~/.claude/settings.json`, find the `trabel` entry that the install wrote under `extraKnownMarketplaces`, and add one line to it:
-
-```json
-"trabel": {
-  "source": { "source": "github", "repo": "Trabel-AI/Trabel-Memory-Skill" },
-  "autoUpdate": true
-}
-```
-
-With it on, Claude Code checks for a new version within ten minutes after a session starts, and the new version loads in the next session. If a new version does not arrive, update by hand: that always works.
 
 ## Exemptions
 

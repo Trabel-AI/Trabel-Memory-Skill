@@ -16,8 +16,9 @@
 // - On a new session (startup, clear) it adds one line: a request to go on
 //   from the plan or the queue runs the continue skill, a bare "continue"
 //   does not.
-// In any folder, once per machine, on a new session: a note that the installed
-// plugin does not update by itself, while automatic updates are off.
+// In any folder, once per machine, on a new session: turns automatic updates
+// on for the plugin's marketplace in the user's Claude Code settings, and says
+// so; when it cannot, says how to turn them on by hand.
 // In a project without memory it prints nothing else.
 // It never fails the session: an error becomes one line of context.
 
@@ -33,7 +34,7 @@ const { planPathsOf, parseQueue } = require('./lib/plan');
 
 const MAX_FILES = 50;
 const MAX_QUEUE_LINES = 100;
-const UPDATE_NOTE_FILE = 'update-note-given';
+const UPDATE_NOTE_FILE = 'auto-update-set';
 
 function readStdin() {
   try {
@@ -123,16 +124,22 @@ function readJson(file) {
 
 // Once per machine, on a new session in any folder: Claude Code keeps
 // automatic updates off for a marketplace that is not Anthropic's, so a person
-// who installed the plugin stays on the installed version without knowing.
-// Only a copy that Claude Code lists as installed speaks (a copy loaded with
-// --plugin-dir has no marketplace), and only while neither of the two files
-// that hold the switch says it is on. A file in the data folder remembers that
-// it was said. Any failure here is silent.
+// who installed the plugin would stay on the installed version without
+// knowing. The hook turns them on itself: it writes "autoUpdate": true into
+// the marketplace's entry under extraKnownMarketplaces in the user's
+// settings.json (the documented switch), after copying the file into the data
+// folder, and tells the user once, with the way to turn it off. When the
+// settings file cannot be read as JSON, or the marketplace's source is known
+// nowhere, nothing is written and the user is told how to turn it on by hand.
+// Only a copy that Claude Code lists as installed acts (a copy loaded with
+// --plugin-dir has no marketplace). It acts once per machine: a file in the
+// data folder remembers that the switch was looked at, so a person who turns
+// updates off afterwards stays off. Any failure here is silent.
 function updateNote({ input, dataArg, env }) {
   try {
     if (input.source !== 'startup' && input.source !== 'clear') return null;
     const data = findDataDir({ given: dataArg, env });
-    if (data.error) return null; // nowhere to remember that it was said
+    if (data.error) return null; // nowhere to remember that it was done
     const marker = path.join(data.dir, UPDATE_NOTE_FILE);
     if (fs.existsSync(marker)) return null;
 
@@ -145,22 +152,74 @@ function updateNote({ input, dataArg, env }) {
     const marketplace = id.slice(id.lastIndexOf('@') + 1);
 
     const settingsFile = path.join(config, 'settings.json');
+    const known = readJson(path.join(config, 'plugins', 'known_marketplaces.json'));
     const isOn = (entries) => Boolean(entries && entries[marketplace] && entries[marketplace].autoUpdate === true);
-    if (isOn(readJson(settingsFile).extraKnownMarketplaces)) return null;
-    if (isOn(readJson(path.join(config, 'plugins', 'known_marketplaces.json')))) return null;
-
     fs.mkdirSync(data.dir, { recursive: true });
+    if (isOn(readJson(settingsFile).extraKnownMarketplaces) || isOn(known)) {
+      fs.writeFileSync(marker, 'Automatic updates were already on.\n');
+      return null;
+    }
+
+    const shown = settingsFile.replace(/\\/g, '/');
+    const byHand = [
+      `- Update by hand, from a terminal: claude plugin marketplace update ${marketplace}, and then: claude plugin update ${id}. The new version loads in the next session.`,
+      `- Turn automatic updates on, once: in Claude Code in a terminal, /plugin, Marketplaces, "${marketplace}", Enable auto-update. Anywhere else, including the VS Code extension: add "autoUpdate": true to the "${marketplace}" entry under extraKnownMarketplaces in ${shown}. You can offer to add that line for the user.`,
+      'This note is given once and does not come back.',
+    ];
+    const written = turnAutoUpdateOn({ settingsFile, marketplace, known, backupDir: data.dir });
+    if (written) {
+      fs.writeFileSync(marker, 'Automatic updates were turned on in the settings file.\n');
+      return [
+        `trabel-memory: this plugin turned automatic updates on for its marketplace "${marketplace}" on this machine, in ${shown} (the "autoUpdate": true line under extraKnownMarketplaces; a copy of the file as it was is in ${path.join(data.dir, SETTINGS_BACKUP).replace(/\\/g, '/')}). Claude Code keeps automatic updates off for a marketplace that is not Anthropic's unless they are turned on, and without them the plugin would stay on the installed version.`,
+        "Tell the user now, once, in one or two plain sentences in the user's language: that it is on, that a new version loads in the session after the one in which Claude Code finds it, and how to turn it off (remove that line, or in Claude Code in a terminal: /plugin, Marketplaces, the marketplace, Disable auto-update).",
+        'This note is given once and does not come back.',
+      ].join('\n');
+    }
     fs.writeFileSync(marker, 'The note about automatic updates was given.\n');
     return [
-      `trabel-memory: this plugin does not update by itself on this machine. Claude Code keeps automatic updates off for a marketplace that is not Anthropic's, and they are not turned on for the marketplace "${marketplace}".`,
+      `trabel-memory: this plugin does not update by itself on this machine. Claude Code keeps automatic updates off for a marketplace that is not Anthropic's, they are not turned on for the marketplace "${marketplace}", and the plugin could not turn them on in ${shown}.`,
       "Tell the user now, once, in two or three plain sentences in the user's language, and give the two ways:",
-      `- Update by hand, from a terminal: claude plugin marketplace update ${marketplace}, and then: claude plugin update ${id}. The new version loads in the next session.`,
-      `- Turn automatic updates on, once: in Claude Code in a terminal, /plugin, Marketplaces, "${marketplace}", Enable auto-update. Anywhere else, including the VS Code extension: add "autoUpdate": true to the "${marketplace}" entry under extraKnownMarketplaces in ${settingsFile.replace(/\\/g, '/')}. You can offer to add that line for the user.`,
-      'This note is given once and does not come back.',
+      ...byHand,
     ].join('\n');
   } catch (e) {
     return null;
   }
+}
+
+const SETTINGS_BACKUP = 'settings.json.before-auto-update';
+
+// Writes "autoUpdate": true for the marketplace in the user's settings.json.
+// Returns true when it wrote. It refuses when the file exists and is not a
+// JSON object (a broken file is never overwritten), and when the marketplace's
+// entry does not exist and its source is not in known_marketplaces.json
+// either (an entry without a source would be wrong). The file as it was goes
+// to the backup first; an empty backup means there was no file.
+function turnAutoUpdateOn({ settingsFile, marketplace, known, backupDir }) {
+  let raw = null;
+  if (fs.existsSync(settingsFile)) raw = fs.readFileSync(settingsFile, 'utf8');
+  let settings = {};
+  if (raw != null) {
+    try {
+      settings = JSON.parse(raw.replace(/^\uFEFF/, ''));
+    } catch (e) {
+      return false;
+    }
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return false;
+  }
+  const entries = settings.extraKnownMarketplaces && typeof settings.extraKnownMarketplaces === 'object' && !Array.isArray(settings.extraKnownMarketplaces)
+    ? settings.extraKnownMarketplaces : {};
+  let entry = entries[marketplace] && typeof entries[marketplace] === 'object' ? entries[marketplace] : null;
+  if (!entry) {
+    const source = known && known[marketplace] && known[marketplace].source;
+    if (!source || typeof source !== 'object') return false;
+    entry = { source };
+  }
+  entry.autoUpdate = true;
+  entries[marketplace] = entry;
+  settings.extraKnownMarketplaces = entries;
+  fs.writeFileSync(path.join(backupDir, SETTINGS_BACKUP), raw == null ? '' : raw);
+  fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
+  return true;
 }
 
 function run({ input, dataArg, env = process.env }) {

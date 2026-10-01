@@ -174,63 +174,128 @@ test('broken settings.json: one line of context, and the session goes on', () =>
   assert.ok(out.includes('settings.json could not be read'), out);
 });
 
-// --- the one-time note about updates ---
+// --- automatic updates, turned on once per machine ---
 
-const UPDATE_NOTE = 'this plugin does not update by itself on this machine';
+const TURNED_ON = 'turned automatic updates on for its marketplace "trabel"';
+const BY_HAND = 'this plugin does not update by itself on this machine';
+const readSettings = (config) => JSON.parse(fs.readFileSync(path.join(config, 'settings.json'), 'utf8'));
 
-test('an installed copy with automatic updates off: said once, in any folder', () => {
+test('an installed copy with automatic updates off: turned on in settings.json, said once, in any folder', () => {
   const config = configDir();
+  const before = fs.readFileSync(path.join(config, 'settings.json'), 'utf8');
   const repo = makeRepo({ installHook: false }); // no memory here
   const first = sessionStart(repo, 'startup', { config });
-  assert.ok(first.includes(UPDATE_NOTE), first);
-  assert.ok(first.includes('claude plugin marketplace update trabel'), first);
-  assert.ok(first.includes('claude plugin update trabel-memory@trabel'), first);
-  assert.ok(first.includes('"autoUpdate": true'), first);
+  assert.ok(first.includes(TURNED_ON), first);
   assert.ok(first.includes(path.join(config, 'settings.json').replace(/\\/g, '/')), first);
+  assert.ok(first.includes('how to turn it off'), first);
+  assert.ok(!first.includes(BY_HAND), first);
+
+  const settings = readSettings(config);
+  assert.strictEqual(settings.extraKnownMarketplaces.trabel.autoUpdate, true);
+  assert.deepStrictEqual(settings.extraKnownMarketplaces.trabel.source, { source: 'github', repo: 'someone/some-repo' });
+  assert.strictEqual(fs.readFileSync(path.join(repo.dataDir, 'settings.json.before-auto-update'), 'utf8'), before);
+  assert.ok(fs.existsSync(path.join(repo.dataDir, 'auto-update-set')));
+
   assert.strictEqual(sessionStart(repo, 'startup', { config }), '');
 
   const withMemory = repoWithMemory();
   assert.strictEqual(sessionStart(withMemory, 'startup', { config, data: repo.dataDir }), CONTINUE_LINE);
 });
 
+test('the rest of settings.json survives, and a missing entry is built from known_marketplaces.json', () => {
+  const settings = { model: 'opus', permissions: { allow: ['Bash(ls)'] }, extraKnownMarketplaces: { other: { source: { source: 'github', repo: 'x/y' } } } };
+  const config = configDir({ settings });
+  const repo = makeRepo({ installHook: false });
+  assert.ok(sessionStart(repo, 'startup', { config }).includes(TURNED_ON));
+  const after = readSettings(config);
+  assert.strictEqual(after.model, 'opus');
+  assert.deepStrictEqual(after.permissions, { allow: ['Bash(ls)'] });
+  assert.deepStrictEqual(after.extraKnownMarketplaces.other, { source: { source: 'github', repo: 'x/y' } });
+  assert.deepStrictEqual(after.extraKnownMarketplaces.trabel, { source: { source: 'github', repo: 'someone/some-repo' }, autoUpdate: true });
+});
+
+test('no settings.json at all: it is created, and the backup is empty', () => {
+  const config = configDir();
+  fs.rmSync(path.join(config, 'settings.json'));
+  const repo = makeRepo({ installHook: false });
+  assert.ok(sessionStart(repo, 'startup', { config }).includes(TURNED_ON));
+  assert.deepStrictEqual(readSettings(config), { extraKnownMarketplaces: { trabel: { source: { source: 'github', repo: 'someone/some-repo' }, autoUpdate: true } } });
+  assert.strictEqual(fs.readFileSync(path.join(repo.dataDir, 'settings.json.before-auto-update'), 'utf8'), '');
+});
+
+test('settings.json that is not JSON, or a source known nowhere: nothing is written, the way by hand is said once', () => {
+  const broken = configDir({ settings: '{ not json' });
+  const repo = makeRepo({ installHook: false });
+  const first = sessionStart(repo, 'startup', { config: broken });
+  assert.ok(first.includes(BY_HAND), first);
+  assert.ok(first.includes('claude plugin marketplace update trabel'), first);
+  assert.ok(first.includes('claude plugin update trabel-memory@trabel'), first);
+  assert.ok(first.includes('"autoUpdate": true'), first);
+  assert.strictEqual(fs.readFileSync(path.join(broken, 'settings.json'), 'utf8'), '{ not json');
+  assert.strictEqual(sessionStart(repo, 'startup', { config: broken }), '');
+
+  const noSource = configDir({ settings: {}, known: '[]' });
+  const repo2 = makeRepo({ installHook: false });
+  assert.ok(sessionStart(repo2, 'startup', { config: noSource }).includes(BY_HAND));
+  assert.strictEqual(fs.readFileSync(path.join(noSource, 'settings.json'), 'utf8'), '{}');
+});
+
 test('the note about updates comes after the rest, in a project with memory', () => {
   const repo = repoWithMemory();
   const out = sessionStart(repo, 'clear', { config: configDir() });
   assert.ok(out.startsWith(CONTINUE_LINE.trimEnd()), out);
-  assert.ok(out.includes(UPDATE_NOTE), out);
+  assert.ok(out.includes(TURNED_ON), out);
 });
 
-test('the note about updates waits for a new session', () => {
+test('turning updates on waits for a new session', () => {
   const config = configDir();
   const repo = makeRepo({ installHook: false });
-  for (const source of ['resume', 'compact', 'fork']) assert.strictEqual(sessionStart(repo, source, { config }), '', source);
-  assert.ok(sessionStart(repo, 'startup', { config }).includes(UPDATE_NOTE));
+  for (const source of ['resume', 'compact', 'fork']) {
+    assert.strictEqual(sessionStart(repo, source, { config }), '', source);
+    assert.strictEqual(readSettings(config).extraKnownMarketplaces.trabel.autoUpdate, undefined, source);
+  }
+  assert.ok(sessionStart(repo, 'startup', { config }).includes(TURNED_ON));
 });
 
-test('automatic updates already on, in either file: no note, and nothing is remembered', () => {
+test('automatic updates already on, in either file: nothing written, nothing said, and the machine is done', () => {
   const source = { source: 'github', repo: 'someone/some-repo' };
-  const repo = makeRepo({ installHook: false });
   const inSettings = configDir({ settings: { extraKnownMarketplaces: { trabel: { source, autoUpdate: true } } } });
   const inKnown = configDir({ known: { trabel: { source, autoUpdate: true } } });
+  const knownBefore = fs.readFileSync(path.join(inKnown, 'settings.json'), 'utf8');
+  const repo = makeRepo({ installHook: false });
   assert.strictEqual(sessionStart(repo, 'startup', { config: inSettings }), '');
-  assert.strictEqual(sessionStart(repo, 'startup', { config: inKnown }), '');
-  assert.ok(sessionStart(repo, 'startup', { config: configDir() }).includes(UPDATE_NOTE));
+  assert.ok(fs.existsSync(path.join(repo.dataDir, 'auto-update-set')));
+  const repo2 = makeRepo({ installHook: false });
+  assert.strictEqual(sessionStart(repo2, 'startup', { config: inKnown }), '');
+  assert.strictEqual(fs.readFileSync(path.join(inKnown, 'settings.json'), 'utf8'), knownBefore);
 });
 
-test('a copy that is not the installed one (--plugin-dir): no note', () => {
+test('a person who turns automatic updates off afterwards stays off', () => {
+  const config = configDir();
+  const repo = makeRepo({ installHook: false });
+  assert.ok(sessionStart(repo, 'startup', { config }).includes(TURNED_ON));
+  const settings = readSettings(config);
+  delete settings.extraKnownMarketplaces.trabel.autoUpdate;
+  fs.writeFileSync(path.join(config, 'settings.json'), JSON.stringify(settings, null, 2));
+  assert.strictEqual(sessionStart(repo, 'startup', { config }), '');
+  assert.strictEqual(readSettings(config).extraKnownMarketplaces.trabel.autoUpdate, undefined);
+});
+
+test('a copy that is not the installed one (--plugin-dir): nothing', () => {
   const repo = makeRepo({ installHook: false });
   const config = configDir({ installPath: path.join(tempDir('trabel-cache-'), 'trabel-memory', 'abc123') });
   assert.strictEqual(sessionStart(repo, 'startup', { config }), '');
+  assert.strictEqual(readSettings(config).extraKnownMarketplaces.trabel.autoUpdate, undefined);
 });
 
-test('Claude Code files that cannot be read, or no data folder: no note, and the session goes on', () => {
+test('Claude Code files that cannot be read, or no data folder: nothing, and the session goes on', () => {
   const repo = makeRepo({ installHook: false });
   assert.strictEqual(sessionStart(repo, 'startup', { config: configDir({ installed: '{ not json' }) }), '');
   assert.strictEqual(sessionStart(repo, 'startup', { config: configDir({ installed: { version: 2 } }) }), '');
-  const broken = configDir({ settings: '{ not json', known: '[]' });
-  assert.ok(sessionStart(repo, 'startup', { config: broken }).includes(UPDATE_NOTE));
 
   const env = { ...process.env };
   delete env.CLAUDE_PLUGIN_DATA;
-  assert.strictEqual(sessionStart(repo, 'startup', { config: configDir(), data: null, env }), '');
+  const config = configDir();
+  assert.strictEqual(sessionStart(repo, 'startup', { config, data: null, env }), '');
+  assert.strictEqual(readSettings(config).extraKnownMarketplaces.trabel.autoUpdate, undefined);
 });
